@@ -43,7 +43,7 @@ export const extratorConfig = {
 };
 
 export const APP_CONFIG = {
-  nome: 'Achadinhos Hub',
+  nome: 'Achadinhos do Deco',
   limitePadraoProdutos: 100,
   extratorTimeoutMs: 15000,
 } as const;

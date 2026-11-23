@@ -121,7 +121,7 @@ export function VitrinePage({ onNavigate }: VitrinePageProps) {
               <ShoppingBag className="w-4 h-4" />
             </span>
             <span className="text-base sm:text-lg font-bold tracking-tight text-white">
-              Achadinhos Hub
+              Achadinhos do Deco
             </span>
           </a>
 

@@ -41,7 +41,7 @@ export function AdminLayout({
               <ShoppingBag className="w-4 h-4" />
             </span>
             <span className="text-base font-bold tracking-tight text-white">
-              Achadinhos Hub
+              Achadinhos do Deco
             </span>
           </a>
 

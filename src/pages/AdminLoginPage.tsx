@@ -31,7 +31,7 @@ export function AdminLoginPage({
             <h1 className="text-lg font-bold tracking-tight text-white">
               Painel Administrativo
             </h1>
-            <p className="text-xs text-slate-400">Achadinhos Hub</p>
+            <p className="text-xs text-slate-400">Achadinhos do Deco</p>
           </div>
         </div>
 

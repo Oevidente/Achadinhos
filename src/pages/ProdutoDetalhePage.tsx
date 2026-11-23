@@ -27,7 +27,7 @@ interface ProdutoDetalhePageProps {
   onToast: (tipo: 'sucesso' | 'erro', mensagem: string) => void;
 }
 
-const TITULO_PADRAO = 'Achadinhos Hub — Ofertas em Promoção';
+const TITULO_PADRAO = 'Achadinhos do Deco — Ofertas em Promoção';
 const DESCRICAO_PADRAO =
   'Curadoria de ofertas e promoções dos principais marketplaces com redirecionamento direto e seguro.';
 
@@ -90,10 +90,10 @@ export function ProdutoDetalhePage({
 
     const precoFmt = formatarMoeda(produto.precoAtual, produto.moeda);
     const plat = PLATAFORMAS_CONFIG[produto.plataforma] ?? PLATAFORMAS_CONFIG.outra;
-    const tituloPagina = `${produto.titulo} (${precoFmt}) — Achadinhos Hub`;
+    const tituloPagina = `${produto.titulo} (${precoFmt}) — Achadinhos do Deco`;
     const descPagina =
       produto.descricao.trim() ||
-      `Oferta conferida em ${plat.nome} por ${precoFmt}. Veja no Achadinhos Hub.`;
+      `Oferta conferida em ${plat.nome} por ${precoFmt}. Veja no Achadinhos do Deco.`;
 
     document.title = tituloPagina;
     atualizarMetaTag('meta[name="description"]', descPagina);
@@ -185,7 +185,7 @@ export function ProdutoDetalhePage({
               <ShoppingBag className="w-4 h-4" />
             </span>
             <span className="text-base sm:text-lg font-bold tracking-tight text-white">
-              Achadinhos Hub
+              Achadinhos do Deco
             </span>
           </a>
 
@@ -233,7 +233,7 @@ export function ProdutoDetalhePage({
           <section className="rounded-2xl border border-[#1E2A20] bg-[#0F1410] py-14 px-6 text-center space-y-4">
             <h1 className="text-xl font-bold text-white">Oferta não encontrada</h1>
             <p className="text-sm text-slate-400 max-w-md mx-auto">
-              O link acessado pode ter sido removido ou não existe mais no Achadinhos Hub.
+              O link acessado pode ter sido removido ou não existe mais no Achadinhos do Deco.
             </p>
             <div>
               <button
