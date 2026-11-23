@@ -1,4 +1,4 @@
-import logoBadgeUrl from '../assets/images/achadinhos_deco_logo_badge.png';
+import { comBasePath } from '../utils/router';
 
 interface BrandLogoProps {
   tamanho?: 'sm' | 'md' | 'lg';
@@ -17,17 +17,22 @@ export function BrandLogo({
   mostrarTexto = true,
   subtitulo,
 }: BrandLogoProps) {
+  const logoSrc = comBasePath(
+    '/assets/aistudio/Emblema_Neon_de_Busca_Circular_cd1f0c41.png',
+    import.meta.env.BASE_URL
+  );
+
   return (
     <span className="inline-flex items-center gap-2.5 whitespace-nowrap shrink-0">
       <span
-        className={`${TAMANHOS_ICONE[tamanho]} overflow-hidden border border-[#22C55E]/40 bg-[#060E07] shadow-[0_0_20px_rgba(34,197,94,0.28)] flex items-center justify-center shrink-0`}
+        className={`${TAMANHOS_ICONE[tamanho]} overflow-hidden border border-[#22C55E]/40 bg-[#051105] shadow-[0_0_20px_rgba(34,197,94,0.28)] flex items-center justify-center shrink-0`}
       >
         <img
-          src={logoBadgeUrl}
+          src={logoSrc}
           alt={mostrarTexto ? '' : 'Logo Achadinhos do Deco'}
           aria-hidden={mostrarTexto ? true : undefined}
           referrerPolicy="no-referrer"
-          className="w-full h-full object-cover"
+          className="w-full h-full object-cover scale-110"
         />
       </span>
       {mostrarTexto && (
