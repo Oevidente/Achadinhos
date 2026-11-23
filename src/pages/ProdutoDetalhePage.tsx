@@ -6,9 +6,9 @@ import {
   Clock,
   Copy,
   Package,
-  ShoppingBag,
   Star,
 } from 'lucide-react';
+import { BrandLogo } from '../components/BrandLogo';
 import { buscarProduto, registrarCliqueProduto } from '../services/produtosService';
 import type { Plataforma, Produto } from '../types/produto';
 import {
@@ -179,14 +179,9 @@ export function ProdutoDetalhePage({
               e.preventDefault();
               onNavigate('/');
             }}
-            className="inline-flex items-center gap-2.5 whitespace-nowrap shrink-0"
+            className="inline-flex items-center whitespace-nowrap shrink-0"
           >
-            <span className="w-8 h-8 rounded-lg bg-[#22C55E] text-[#052E16] flex items-center justify-center">
-              <ShoppingBag className="w-4 h-4" />
-            </span>
-            <span className="text-base sm:text-lg font-bold tracking-tight text-white">
-              Achadinhos do Deco
-            </span>
+            <BrandLogo tamanho="sm" />
           </a>
 
           <a

@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import type { User } from 'firebase/auth';
-import { LogOut, ShoppingBag } from 'lucide-react';
+import { LogOut } from 'lucide-react';
+import { BrandLogo } from './BrandLogo';
 import { comBasePath, type AppRoute } from '../utils/router';
 
 interface AdminLayoutProps {
@@ -35,14 +36,9 @@ export function AdminLayout({
               e.preventDefault();
               onNavigate('/admin');
             }}
-            className="inline-flex items-center gap-2.5 whitespace-nowrap shrink-0 focus-visible:outline-2 focus-visible:outline-[#22C55E] rounded-lg"
+            className="inline-flex items-center whitespace-nowrap shrink-0 focus-visible:outline-2 focus-visible:outline-[#22C55E] rounded-lg"
           >
-            <span className="w-8 h-8 rounded-lg bg-[#22C55E] text-[#070A07] flex items-center justify-center">
-              <ShoppingBag className="w-4 h-4" />
-            </span>
-            <span className="text-base font-bold tracking-tight text-white">
-              Achadinhos do Deco
-            </span>
+            <BrandLogo tamanho="sm" />
           </a>
 
           <nav aria-label="Navegação do painel" className="flex items-center gap-5 sm:gap-6">

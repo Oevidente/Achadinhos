@@ -1,4 +1,5 @@
-import { AlertCircle, ShoppingBag } from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
+import { BrandLogo } from '../components/BrandLogo';
 import { comBasePath } from '../utils/router';
 
 interface AdminLoginPageProps {
@@ -24,9 +25,7 @@ export function AdminLoginPage({
     <div className="min-h-screen bg-[#070A07] text-slate-100 flex items-center justify-center p-4">
       <div className="w-full max-w-md rounded-2xl border border-[#1E2A20] bg-[#0F1410] p-6 sm:p-8 space-y-6">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-[#22C55E] text-[#070A07] flex items-center justify-center shrink-0">
-            <ShoppingBag className="w-5 h-5" />
-          </div>
+          <BrandLogo tamanho="lg" mostrarTexto={false} />
           <div>
             <h1 className="text-lg font-bold tracking-tight text-white">
               Painel Administrativo
