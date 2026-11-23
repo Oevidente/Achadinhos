@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Achadinhos Hub — Ofertas em Promoção</title>
+    <meta
+      name="description"
+      content="Curadoria de ofertas e promoções de Shopee, Mercado Livre, Amazon, Magalu e outros marketplaces com redirecionamento direto."
+    />
+    <meta name="theme-color" content="#070A07" />
+    <link rel="icon" type="image/svg+xml" href="%BASE_URL%favicon.svg" />
+    <meta property="og:site_name" content="Achadinhos Hub" />
+    <meta property="og:locale" content="pt_BR" />
+    <meta property="og:title" content="Achadinhos Hub — Ofertas em Promoção" />
+    <meta
+      property="og:description"
+      content="Curadoria de ofertas e promoções dos principais marketplaces com redirecionamento direto."
+    />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Achadinhos Hub — Ofertas em Promoção" />
+    <meta
+      name="twitter:description"
+      content="Curadoria de ofertas e promoções dos principais marketplaces com redirecionamento direto."
+    />
+    <script>
+      (function () {
+        var params = new URLSearchParams(window.location.search);
+        var ghRoute = params.get('gh_route');
+        if (ghRoute && ghRoute.charAt(0) === '/' && ghRoute.charAt(1) !== '/') {
+          var base = '%BASE_URL%';
+          var prefix = base === '/' ? '' : base.replace(/\/+$/, '');
+          window.history.replaceState(null, '', prefix + ghRoute);
+        }
+      })();
+    </script>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "WebSite",
+        "name": "Achadinhos Hub",
+        "description": "Curadoria de ofertas e promoções dos principais marketplaces com redirecionamento direto.",
+        "inLanguage": "pt-BR"
+      }
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

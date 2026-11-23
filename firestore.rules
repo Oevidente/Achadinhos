@@ -1,0 +1,169 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Regra global de bloqueio: todo o resto da base fica bloqueado por padrão.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Lista de e-mails autorizados como ADM.
+    // Substitua 'SEU_EMAIL_AQUI@gmail.com' pelo seu e-mail Google de administrador.
+    function adminEmails() {
+      return [
+        'andreluiz1902@gmail.com',
+        'SEU_EMAIL_AQUI@gmail.com'
+      ];
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn() &&
+        request.auth.token.email_verified == true &&
+        request.auth.token.email in adminEmails();
+    }
+
+    function isValidPlataforma(p) {
+      return p is string && p.size() >= 1 && p.size() <= 32 && p in [
+        'shopee',
+        'mercado_livre',
+        'amazon',
+        'tiktok_shop',
+        'magalu',
+        'aliexpress',
+        'americanas',
+        'kabum',
+        'outra'
+      ];
+    }
+
+    function isValidStatus(s) {
+      return s is string && s.size() >= 1 && s.size() <= 20 && s in ['ativo', 'inativo', 'expirado'];
+    }
+
+    function isValidOrigemDados(o) {
+      return o is string && o.size() >= 1 && o.size() <= 20 && o in ['manual', 'automatico'];
+    }
+
+    function isValidMoeda(m) {
+      return m is string && m.size() >= 3 && m.size() <= 10 && m in ['BRL', 'USD', 'EUR'];
+    }
+
+    function isValidProduto(data) {
+      return data.keys().hasAll([
+        'titulo',
+        'descricao',
+        'imagemUrl',
+        'precoAtual',
+        'precoOriginal',
+        'moeda',
+        'plataforma',
+        'linkOriginal',
+        'linkAfiliado',
+        'status',
+        'origemDados',
+        'destaque',
+        'cliques',
+        'criadoEm',
+        'atualizadoEm'
+      ]) &&
+      data.keys().hasOnly([
+        'titulo',
+        'descricao',
+        'imagemUrl',
+        'precoAtual',
+        'precoOriginal',
+        'moeda',
+        'plataforma',
+        'linkOriginal',
+        'linkAfiliado',
+        'status',
+        'origemDados',
+        'destaque',
+        'cliques',
+        'validoAte',
+        'criadoEm',
+        'atualizadoEm'
+      ]) &&
+      data.titulo is string && data.titulo.size() >= 1 && data.titulo.size() <= 200 &&
+      data.descricao is string && data.descricao.size() <= 2000 &&
+      data.imagemUrl is string && data.imagemUrl.size() <= 2048 &&
+      data.precoAtual is number && data.precoAtual >= 0 &&
+      (data.precoOriginal == null || (data.precoOriginal is number && data.precoOriginal >= 0)) &&
+      isValidMoeda(data.moeda) &&
+      isValidPlataforma(data.plataforma) &&
+      data.linkOriginal is string && data.linkOriginal.size() >= 1 && data.linkOriginal.size() <= 2048 &&
+      (data.linkAfiliado == null || (data.linkAfiliado is string && data.linkAfiliado.size() <= 2048)) &&
+      isValidStatus(data.status) &&
+      isValidOrigemDados(data.origemDados) &&
+      data.destaque is bool &&
+      data.cliques is number && data.cliques >= 0 &&
+      (!('validoAte' in data) || data.validoAte == null || (data.validoAte is string && data.validoAte.size() <= 32 && data.validoAte.matches('^\\d{4}-\\d{2}-\\d{2}$'))) &&
+      data.criadoEm is timestamp &&
+      data.atualizadoEm is timestamp;
+    }
+
+    match /produtos/{produtoId} {
+      // Leitura pública para visitantes e administradores
+      allow get: if isValidId(produtoId);
+      allow list: if true;
+
+      // Escrita exclusiva para ADMs autenticados com e-mail verificado
+      allow create: if isAdmin() &&
+        isValidId(produtoId) &&
+        isValidProduto(incoming()) &&
+        incoming().criadoEm == request.time &&
+        incoming().atualizadoEm == request.time;
+
+      // Atualização:
+      // 1) Visitante pode incrementar somente 'cliques' em +1
+      // 2) ADM autenticado pode editar os campos permitidos
+      allow update: if isValidId(produtoId) && isValidProduto(incoming()) && (
+        (
+          incoming().diff(existing()).affectedKeys().hasOnly(['cliques']) &&
+          incoming().cliques == existing().cliques + 1
+        ) ||
+        (
+          isAdmin() &&
+          incoming().criadoEm == existing().criadoEm &&
+          incoming().atualizadoEm == request.time &&
+          incoming().diff(existing()).affectedKeys().hasOnly([
+            'titulo',
+            'descricao',
+            'imagemUrl',
+            'precoAtual',
+            'precoOriginal',
+            'moeda',
+            'plataforma',
+            'linkOriginal',
+            'linkAfiliado',
+            'status',
+            'origemDados',
+            'destaque',
+            'cliques',
+            'validoAte',
+            'atualizadoEm'
+          ])
+        )
+      );
+
+      allow delete: if isAdmin() && isValidId(produtoId);
+    }
+  }
+}

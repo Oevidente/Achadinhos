@@ -1,0 +1,133 @@
+{
+  "entities": {
+    "Produto": {
+      "title": "Produto",
+      "description": "Produto de marketplace cadastrado pelo administrador para exibição de promoção.",
+      "type": "object",
+      "properties": {
+        "titulo": {
+          "type": "string",
+          "description": "Título do produto (obrigatório).",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "descricao": {
+          "type": "string",
+          "description": "Descrição do produto (pode ser vazia).",
+          "minLength": 0,
+          "maxLength": 2000
+        },
+        "imagemUrl": {
+          "type": "string",
+          "format": "uri",
+          "description": "URL externa da imagem do produto.",
+          "minLength": 0,
+          "maxLength": 2048
+        },
+        "precoAtual": {
+          "type": "number",
+          "description": "Preço atual em reais (BRL)."
+        },
+        "precoOriginal": {
+          "type": "number",
+          "description": "Preço original ('de') em reais para cálculo de desconto, ou null."
+        },
+        "moeda": {
+          "type": "string",
+          "description": "Código da moeda (padrão BRL).",
+          "enum": ["BRL", "USD", "EUR"],
+          "minLength": 3,
+          "maxLength": 10
+        },
+        "plataforma": {
+          "type": "string",
+          "description": "Identificador da plataforma/marketplace.",
+          "enum": [
+            "shopee",
+            "mercado_livre",
+            "amazon",
+            "tiktok_shop",
+            "magalu",
+            "aliexpress",
+            "americanas",
+            "kabum",
+            "outra"
+          ]
+        },
+        "linkOriginal": {
+          "type": "string",
+          "format": "uri",
+          "description": "Link original do produto colado pelo ADM.",
+          "minLength": 1,
+          "maxLength": 2048
+        },
+        "linkAfiliado": {
+          "type": "string",
+          "format": "uri",
+          "description": "Link de afiliado opcional utilizado no botão de redirecionamento, ou null.",
+          "maxLength": 2048
+        },
+        "status": {
+          "type": "string",
+          "description": "Status de exibição do produto.",
+          "enum": ["ativo", "inativo", "expirado"]
+        },
+        "origemDados": {
+          "type": "string",
+          "description": "Origem do preenchimento dos dados.",
+          "enum": ["manual", "automatico"]
+        },
+        "destaque": {
+          "type": "boolean",
+          "description": "Indica se o produto aparece em destaque (padrão false)."
+        },
+        "cliques": {
+          "type": "number",
+          "description": "Contador de cliques no link (padrão 0)."
+        },
+        "validoAte": {
+          "type": "string",
+          "format": "date",
+          "description": "Data limite opcional (YYYY-MM-DD) para expiração automática da oferta, ou null.",
+          "maxLength": 32,
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        },
+        "criadoEm": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp de criação definido via serverTimestamp()."
+        },
+        "atualizadoEm": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp da última atualização definido via serverTimestamp()."
+        }
+      },
+      "required": [
+        "titulo",
+        "descricao",
+        "imagemUrl",
+        "precoAtual",
+        "precoOriginal",
+        "moeda",
+        "plataforma",
+        "linkOriginal",
+        "linkAfiliado",
+        "status",
+        "origemDados",
+        "destaque",
+        "cliques",
+        "criadoEm",
+        "atualizadoEm"
+      ]
+    }
+  },
+  "firestore": {
+    "/produtos/{produtoId}": {
+      "schema": {
+        "$ref": "#/entities/Produto"
+      },
+      "description": "Coleção principal de produtos em promoção. Leitura pública e escrita exclusiva de administradores autenticados."
+    }
+  }
+}
