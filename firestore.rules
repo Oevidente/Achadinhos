@@ -53,6 +53,19 @@ service cloud.firestore {
       ];
     }
 
+    function isValidCategoria(c) {
+      return c is string && c.size() >= 1 && c.size() <= 40 && c in [
+        'tech_gamer',
+        'celulares_audio',
+        'casa_cozinha',
+        'moda_beleza',
+        'esporte_lazer',
+        'ferramentas_auto',
+        'presentes_variedades',
+        'outros'
+      ];
+    }
+
     function isValidStatus(s) {
       return s is string && s.size() >= 1 && s.size() <= 20 && s in ['ativo', 'inativo', 'expirado'];
     }
@@ -99,6 +112,7 @@ service cloud.firestore {
         'cliques',
         'validoAte',
         'cupom',
+        'categoria',
         'criadoEm',
         'atualizadoEm'
       ]) &&
@@ -117,6 +131,7 @@ service cloud.firestore {
       data.cliques is number && data.cliques >= 0 &&
       (!('validoAte' in data) || data.validoAte == null || (data.validoAte is string && data.validoAte.size() <= 32 && data.validoAte.matches('^\\d{4}-\\d{2}-\\d{2}$'))) &&
       (!('cupom' in data) || data.cupom == null || (data.cupom is string && data.cupom.size() <= 64)) &&
+      (!('categoria' in data) || data.categoria == null || isValidCategoria(data.categoria)) &&
       data.criadoEm is timestamp &&
       data.atualizadoEm is timestamp;
     }
@@ -161,6 +176,7 @@ service cloud.firestore {
             'cliques',
             'validoAte',
             'cupom',
+            'categoria',
             'atualizadoEm'
           ])
         )

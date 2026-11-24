@@ -19,6 +19,7 @@ import {
 } from 'firebase/firestore';
 import { APP_CONFIG } from '../config';
 import type { AtualizarProdutoInput, CriarProdutoInput, Produto } from '../types/produto';
+import { normalizarCategoria } from '../utils/categorias';
 import {
   sanitizarAtualizacaoProduto,
   sanitizarCriacaoProduto,
@@ -60,6 +61,7 @@ function mapearDocumentoProduto(snap: QueryDocumentSnapshot<DocumentData>): Prod
       typeof data.cupom === 'string' && data.cupom.trim()
         ? data.cupom.trim()
         : null,
+    categoria: normalizarCategoria(data.categoria),
     criadoEm: data.criadoEm ?? null,
     atualizadoEm: data.atualizadoEm ?? null,
   };

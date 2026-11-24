@@ -15,6 +15,7 @@ import {
 const formValidoBase: ProdutoFormState = {
   linkOriginal: 'https://s.shopee.com.br/abc123',
   plataforma: 'shopee',
+  categoria: '',
   titulo: 'Fone de Ouvido Sem Fio',
   descricao: 'Bluetooth 5.3 com estojo carregador.',
   imagemUrl: 'https://cdn.exemplo.com/fone.jpg',
@@ -41,9 +42,10 @@ test('isHttpsUrl aceita apenas URLs https válidas', () => {
   assert.equal(isHttpsUrl('amazon.com.br/dp/B123'), false);
 });
 
-test('validarFormularioProduto exige https, título, preço > 0, preço original >= atual, imagem válida e trata validoAte e cupom opcionais', () => {
+test('validarFormularioProduto exige https, título, preço > 0, preço original >= atual, imagem válida e trata validoAte, cupom e categoria opcionais', () => {
   const ok = validarFormularioProduto({
     ...formValidoBase,
+    categoria: 'celulares_audio',
     validoAte: '2026-12-25',
     cupom: '  DECO10  ',
   });
@@ -52,10 +54,12 @@ test('validarFormularioProduto exige https, título, preço > 0, preço original
   assert.equal(ok.precoOriginalNum, 149.9);
   assert.equal(ok.validoAteValor, '2026-12-25');
   assert.equal(ok.cupomValor, 'DECO10');
+  assert.equal(ok.categoriaValor, 'celulares_audio');
 
   const semCupom = validarFormularioProduto({ ...formValidoBase, cupom: '   ' });
   assert.equal(semCupom.valido, true);
   assert.equal(semCupom.cupomValor, null);
+  assert.equal(semCupom.categoriaValor, null);
 
   const cupomLongo = validarFormularioProduto({
     ...formValidoBase,
@@ -89,7 +93,7 @@ test('validarFormularioProduto exige https, título, preço > 0, preço original
   assert.ok(origMenor.erros.precoOriginal);
 });
 
-test('filtrarProdutosAdmin filtra e ordena por mais clicados', () => {
+test('filtrarProdutosAdmin filtra por texto, status, plataforma, categoria e ordena por mais clicados', () => {
   const itens: Produto[] = [
     {
       id: '1',
@@ -100,6 +104,7 @@ test('filtrarProdutosAdmin filtra e ordena por mais clicados', () => {
       precoOriginal: null,
       moeda: 'BRL',
       plataforma: 'amazon',
+      categoria: 'tech_gamer',
       linkOriginal: 'https://amazon.com.br/1',
       linkAfiliado: null,
       status: 'ativo',
@@ -119,6 +124,7 @@ test('filtrarProdutosAdmin filtra e ordena por mais clicados', () => {
       precoOriginal: 79.9,
       moeda: 'BRL',
       plataforma: 'shopee',
+      categoria: null,
       linkOriginal: 'https://shopee.com.br/2',
       linkAfiliado: null,
       status: 'expirado',
@@ -141,6 +147,24 @@ test('filtrarProdutosAdmin filtra e ordena por mais clicados', () => {
   );
   assert.equal(
     filtrarProdutosAdmin(itens, { busca: '', status: 'todos', plataforma: 'shopee' })[0]?.id,
+    '2'
+  );
+  assert.equal(
+    filtrarProdutosAdmin(itens, {
+      busca: '',
+      status: 'todos',
+      plataforma: 'todas',
+      categoria: 'tech_gamer',
+    })[0]?.id,
+    '1'
+  );
+  assert.equal(
+    filtrarProdutosAdmin(itens, {
+      busca: '',
+      status: 'todos',
+      plataforma: 'todas',
+      categoria: 'sem_categoria',
+    })[0]?.id,
     '2'
   );
   assert.deepEqual(

@@ -8,8 +8,10 @@ import {
   criarProduto,
 } from '../services/produtosService';
 import {
+  CATEGORIAS_PRODUTO,
   PLATAFORMAS,
   STATUS_PRODUTO,
+  type CategoriaProduto,
   type OrigemDadosProduto,
   type Plataforma,
   type StatusProduto,
@@ -21,6 +23,7 @@ import {
   type ProdutoFormErros,
   type ProdutoFormState,
 } from '../utils/adminHelpers';
+import { CATEGORIAS_CONFIG, sugerirCategoriaProduto } from '../utils/categorias';
 import { formatarPrecoParaInput } from '../utils/extratorHelpers';
 import { detectarPlataforma, PLATAFORMAS_CONFIG } from '../utils/plataformas';
 
@@ -33,6 +36,7 @@ interface AdminProdutoFormPageProps {
 const ESTADO_INICIAL: ProdutoFormState = {
   linkOriginal: '',
   plataforma: 'outra',
+  categoria: '',
   titulo: '',
   descricao: '',
   imagemUrl: '',
@@ -92,6 +96,7 @@ export function AdminProdutoFormPage({
         setForm({
           linkOriginal: produto.linkOriginal,
           plataforma: produto.plataforma,
+          categoria: produto.categoria ?? '',
           titulo: produto.titulo,
           descricao: produto.descricao,
           imagemUrl: produto.imagemUrl,
@@ -169,19 +174,25 @@ export function AdminProdutoFormPage({
       setForm((prev) => {
         const precoAtualFmt = formatarPrecoParaInput(extraido.precoAtual);
         const precoOrigFmt = formatarPrecoParaInput(extraido.precoOriginal);
+        const tituloFinal = extraido.titulo || prev.titulo;
+        const descFinal = extraido.descricao || prev.descricao;
+        const categoriaSugerida =
+          prev.categoria || sugerirCategoriaProduto(tituloFinal, descFinal) || '';
 
         if (extraido.titulo) preenchidos.add('titulo');
         if (extraido.descricao) preenchidos.add('descricao');
         if (extraido.imagemUrl) preenchidos.add('imagemUrl');
         if (precoAtualFmt) preenchidos.add('precoAtual');
         if (precoOrigFmt) preenchidos.add('precoOriginal');
+        if (!prev.categoria && categoriaSugerida) preenchidos.add('categoria');
         preenchidos.add('plataforma');
 
         return {
           ...prev,
           plataforma: extraido.plataforma,
-          titulo: extraido.titulo || prev.titulo,
-          descricao: extraido.descricao || prev.descricao,
+          categoria: categoriaSugerida,
+          titulo: tituloFinal,
+          descricao: descFinal,
           imagemUrl: extraido.imagemUrl || prev.imagemUrl,
           precoAtual: precoAtualFmt || prev.precoAtual,
           precoOriginal: precoOrigFmt || prev.precoOriginal,
@@ -240,6 +251,7 @@ export function AdminProdutoFormPage({
         await atualizarProduto(produtoId, {
           linkOriginal: form.linkOriginal,
           plataforma: form.plataforma,
+          categoria: validacao.categoriaValor,
           titulo: form.titulo,
           descricao: form.descricao,
           imagemUrl: form.imagemUrl,
@@ -257,6 +269,7 @@ export function AdminProdutoFormPage({
         await criarProduto({
           linkOriginal: form.linkOriginal,
           plataforma: form.plataforma,
+          categoria: validacao.categoriaValor,
           titulo: form.titulo,
           descricao: form.descricao,
           imagemUrl: form.imagemUrl,
@@ -376,30 +389,59 @@ export function AdminProdutoFormPage({
               )}
             </div>
 
-            <div>
-              <label
-                htmlFor="campo-plataforma"
-                className="block text-xs font-medium text-slate-300 mb-1.5"
-              >
-                Plataforma (detectada automaticamente)
-              </label>
-              <select
-                id="campo-plataforma"
-                value={form.plataforma}
-                onChange={(e) =>
-                  atualizarCampo('plataforma', e.target.value as Plataforma)
-                }
-                className={`w-full sm:w-64 rounded-lg border px-3 py-2 text-sm text-white focus:outline-none ${classeCampoExtraido(
-                  'plataforma',
-                  false
-                )}`}
-              >
-                {PLATAFORMAS.map((platId) => (
-                  <option key={platId} value={platId}>
-                    {PLATAFORMAS_CONFIG[platId].nome}
-                  </option>
-                ))}
-              </select>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label
+                  htmlFor="campo-plataforma"
+                  className="block text-xs font-medium text-slate-300 mb-1.5"
+                >
+                  Plataforma (detectada automaticamente)
+                </label>
+                <select
+                  id="campo-plataforma"
+                  value={form.plataforma}
+                  onChange={(e) =>
+                    atualizarCampo('plataforma', e.target.value as Plataforma)
+                  }
+                  className={`w-full rounded-lg border px-3 py-2 text-sm text-white focus:outline-none ${classeCampoExtraido(
+                    'plataforma',
+                    false
+                  )}`}
+                >
+                  {PLATAFORMAS.map((platId) => (
+                    <option key={platId} value={platId}>
+                      {PLATAFORMAS_CONFIG[platId].nome}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label
+                  htmlFor="campo-categoria"
+                  className="block text-xs font-medium text-slate-300 mb-1.5"
+                >
+                  Categoria
+                </label>
+                <select
+                  id="campo-categoria"
+                  value={form.categoria}
+                  onChange={(e) =>
+                    atualizarCampo('categoria', e.target.value as CategoriaProduto | '')
+                  }
+                  className={`w-full rounded-lg border px-3 py-2 text-sm text-white focus:outline-none ${classeCampoExtraido(
+                    'categoria',
+                    false
+                  )}`}
+                >
+                  <option value="">Detectar automaticamente</option>
+                  {CATEGORIAS_PRODUTO.map((catId) => (
+                    <option key={catId} value={catId}>
+                      {CATEGORIAS_CONFIG[catId].nome}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
 
             {avisosExtrator.length > 0 && (
@@ -722,6 +764,8 @@ export function AdminProdutoFormPage({
                       : null,
                   moeda: 'BRL',
                   plataforma: form.plataforma,
+                  categoria: form.categoria || null,
+                  descricao: form.descricao,
                   linkOriginal: form.linkOriginal,
                   linkAfiliado: form.linkAfiliado.trim() || null,
                   destaque: form.destaque,

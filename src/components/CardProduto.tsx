@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
 import { ArrowRight, Check, Copy, Package, Share2, Star, Ticket } from 'lucide-react';
 import { registrarCliqueProduto } from '../services/produtosService';
-import type { Plataforma, Produto } from '../types/produto';
+import type { CategoriaProduto, Plataforma, Produto } from '../types/produto';
 import {
   calcularDescontoPercentual,
   formatarMoeda,
   formatarTempoRelativo,
 } from '../utils/adminHelpers';
+import { obterCategoriaEfetiva, obterNomeCategoria } from '../utils/categorias';
 import { PLATAFORMAS_CONFIG } from '../utils/plataformas';
 import { comBasePath } from '../utils/router';
 import { obterUrlDestinoOferta } from '../utils/vitrineHelpers';
@@ -25,7 +26,9 @@ export interface CardProdutoProps {
     | 'destaque'
   > & {
     id?: string;
+    descricao?: string;
     cupom?: string | null;
+    categoria?: CategoriaProduto | null;
     atualizadoEm?: Produto['atualizadoEm'];
   };
   modoPreview?: boolean;
@@ -74,6 +77,12 @@ export function CardProduto({
   };
 
   const cupomLimpo = produto.cupom?.trim() ?? '';
+  const categoriaEfetiva = obterCategoriaEfetiva({
+    categoria: produto.categoria,
+    titulo: produto.titulo,
+    descricao: produto.descricao ?? '',
+  });
+  const nomeCategoria = obterNomeCategoria(categoriaEfetiva);
 
   const handleCopiarCupom = async () => {
     if (!cupomLimpo || modoPreview) return;
@@ -147,6 +156,12 @@ export function CardProduto({
         </div>
 
         <div className="space-y-1.5">
+          {nomeCategoria && (
+            <p className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider text-slate-500 truncate">
+              {nomeCategoria}
+            </p>
+          )}
+
           <h3 className="text-xs sm:text-sm font-semibold text-slate-900 leading-snug line-clamp-2 min-h-[2.25rem] sm:min-h-[2.5rem]">
             {podeAbrirDetalhes && produto.id ? (
               <a

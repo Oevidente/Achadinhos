@@ -18,6 +18,7 @@ import {
   formatarTempoRelativo,
   produtoEstaExpirado,
 } from '../utils/adminHelpers';
+import { obterCategoriaEfetiva, obterNomeCategoria } from '../utils/categorias';
 import { PLATAFORMAS_CONFIG } from '../utils/plataformas';
 import { comBasePath } from '../utils/router';
 import { obterUrlDestinoOferta } from '../utils/vitrineHelpers';
@@ -181,6 +182,7 @@ export function ProdutoDetalhePage({
       : null;
   const tempoConferido = produto ? formatarTempoRelativo(produto.atualizadoEm) : '';
   const urlDestino = produto ? obterUrlDestinoOferta(produto) : '';
+  const nomeCategoria = produto ? obterNomeCategoria(obterCategoriaEfetiva(produto)) : '';
 
   return (
     <div className="min-h-screen bg-[#070A07] text-slate-100 flex flex-col">
@@ -306,6 +308,12 @@ export function ProdutoDetalhePage({
                 >
                   {plat.nome}
                 </span>
+
+                {nomeCategoria && (
+                  <span className="px-2.5 py-1 rounded-md border border-[#1E2A20] bg-[#070A07] text-slate-300 text-xs font-medium">
+                    {nomeCategoria}
+                  </span>
+                )}
 
                 {produto.destaque && (
                   <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-[#122616] border border-[#22C55E]/40 text-[#4ADE80] text-xs font-bold">

@@ -20,6 +20,19 @@ export type StatusProduto = (typeof STATUS_PRODUTO)[number];
 export const ORIGENS_DADOS = ['manual', 'automatico'] as const;
 export type OrigemDadosProduto = (typeof ORIGENS_DADOS)[number];
 
+export const CATEGORIAS_PRODUTO = [
+  'tech_gamer',
+  'celulares_audio',
+  'casa_cozinha',
+  'moda_beleza',
+  'esporte_lazer',
+  'ferramentas_auto',
+  'presentes_variedades',
+  'outros',
+] as const;
+
+export type CategoriaProduto = (typeof CATEGORIAS_PRODUTO)[number];
+
 export interface Produto {
   id: string;
   titulo: string;
@@ -37,6 +50,7 @@ export interface Produto {
   cliques: number;
   validoAte?: string | null;
   cupom?: string | null;
+  categoria?: CategoriaProduto | null;
   criadoEm: Timestamp | Date | null;
   atualizadoEm: Timestamp | Date | null;
 }
@@ -57,6 +71,7 @@ export interface CriarProdutoInput {
   cliques?: number;
   validoAte?: string | null;
   cupom?: string | null;
+  categoria?: CategoriaProduto | null;
 }
 
 export type AtualizarProdutoInput = Partial<Omit<CriarProdutoInput, 'cliques'>> & {

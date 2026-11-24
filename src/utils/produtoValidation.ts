@@ -1,13 +1,16 @@
 import {
+  CATEGORIAS_PRODUTO,
   ORIGENS_DADOS,
   PLATAFORMAS,
   STATUS_PRODUTO,
   type AtualizarProdutoInput,
+  type CategoriaProduto,
   type CriarProdutoInput,
   type OrigemDadosProduto,
   type Plataforma,
   type StatusProduto,
 } from '../types/produto';
+import { normalizarCategoria } from './categorias';
 import { detectarPlataforma } from './plataformas';
 
 export const PRODUTO_LIMITES = {
@@ -36,6 +39,7 @@ export interface ProdutoPayloadSanitizado {
   cliques: number;
   validoAte: string | null;
   cupom: string | null;
+  categoria: CategoriaProduto | null;
 }
 
 export function validarIdDocumento(id: string): string {
@@ -84,6 +88,17 @@ export function normalizarCupom(valor?: string | null): string | null {
   if (valor === null || valor === undefined) return null;
   const limpo = valor.trim().slice(0, PRODUTO_LIMITES.CUPOM_MAX);
   return limpo || null;
+}
+
+function validarECastCategoria(valor: unknown): CategoriaProduto | null {
+  if (valor === null || valor === undefined) return null;
+  const str = String(valor).trim();
+  if (!str) return null;
+  const cat = normalizarCategoria(str);
+  if (!cat || !CATEGORIAS_PRODUTO.includes(cat)) {
+    throw new Error('Categoria inválida.');
+  }
+  return cat;
 }
 
 export function sanitizarCriacaoProduto(input: CriarProdutoInput): ProdutoPayloadSanitizado {
@@ -142,6 +157,7 @@ export function sanitizarCriacaoProduto(input: CriarProdutoInput): ProdutoPayloa
     cliques,
     validoAte: normalizarValidoAte(input.validoAte),
     cupom: normalizarCupom(input.cupom),
+    categoria: validarECastCategoria(input.categoria),
   };
 }
 
@@ -238,6 +254,10 @@ export function sanitizarAtualizacaoProduto(
 
   if (input.cupom !== undefined) {
     resultado.cupom = normalizarCupom(input.cupom);
+  }
+
+  if (input.categoria !== undefined) {
+    resultado.categoria = validarECastCategoria(input.categoria);
   }
 
   return resultado;

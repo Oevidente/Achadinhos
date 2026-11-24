@@ -1,9 +1,15 @@
-import type { Plataforma, Produto } from '../types/produto';
+import {
+  CATEGORIAS_PRODUTO,
+  type CategoriaProduto,
+  type Plataforma,
+  type Produto,
+} from '../types/produto';
 import {
   calcularDescontoPercentual,
   extrairTimestampMs,
   produtoEstaExpirado,
 } from './adminHelpers';
+import { obterCategoriaEfetiva, obterNomeCategoria } from './categorias';
 
 export type OrdenacaoVitrine = 'mais_recentes' | 'menor_preco' | 'maior_desconto';
 
@@ -18,6 +24,7 @@ export const PLATAFORMAS_PRINCIPAIS_VITRINE: readonly Plataforma[] = [
 export interface FiltrosVitrine {
   busca: string;
   plataforma: 'todas' | Plataforma;
+  categoria?: 'todas' | CategoriaProduto;
   ordenacao: OrdenacaoVitrine;
 }
 
@@ -42,12 +49,17 @@ export function obterPlataformasFiltro(
   return resultado;
 }
 
+export function obterCategoriasVitrine(): readonly CategoriaProduto[] {
+  return CATEGORIAS_PRODUTO;
+}
+
 export function filtrarEOrdenarVitrine(
   produtos: readonly Produto[],
   filtros: FiltrosVitrine,
   referencia: Date = new Date()
 ): Produto[] {
   const termo = filtros.busca.trim().toLowerCase();
+  const categoriaFiltro = filtros.categoria ?? 'todas';
 
   const filtrados = produtos.filter((produto) => {
     if (produto.status !== 'ativo') return false;
@@ -55,11 +67,16 @@ export function filtrarEOrdenarVitrine(
     if (filtros.plataforma !== 'todas' && produto.plataforma !== filtros.plataforma) {
       return false;
     }
+    const categoriaEfetiva = obterCategoriaEfetiva(produto);
+    if (categoriaFiltro !== 'todas' && categoriaEfetiva !== categoriaFiltro) {
+      return false;
+    }
     if (termo) {
       const noTitulo = produto.titulo.toLowerCase().includes(termo);
       const naDesc = produto.descricao.toLowerCase().includes(termo);
       const noCupom = (produto.cupom ?? '').toLowerCase().includes(termo);
-      if (!noTitulo && !naDesc && !noCupom) return false;
+      const naCategoria = obterNomeCategoria(categoriaEfetiva).toLowerCase().includes(termo);
+      if (!noTitulo && !naDesc && !noCupom && !naCategoria) return false;
     }
     return true;
   });

@@ -22,8 +22,10 @@ import {
   listarProdutos,
 } from '../services/produtosService';
 import {
+  CATEGORIAS_PRODUTO,
   PLATAFORMAS,
   STATUS_PRODUTO,
+  type CategoriaProduto,
   type Plataforma,
   type Produto,
   type StatusProduto,
@@ -36,6 +38,11 @@ import {
   produtoEstaExpirado,
   type OrdenacaoAdmin,
 } from '../utils/adminHelpers';
+import {
+  CATEGORIAS_CONFIG,
+  obterCategoriaEfetiva,
+  obterNomeCategoria,
+} from '../utils/categorias';
 import { PLATAFORMAS_CONFIG } from '../utils/plataformas';
 
 interface AdminProdutosPageProps {
@@ -104,6 +111,7 @@ export function AdminProdutosPage({ onNavigate, onToast }: AdminProdutosPageProp
   const [busca, setBusca] = useState('');
   const [filtroStatus, setFiltroStatus] = useState<'todos' | StatusProduto>('todos');
   const [filtroPlataforma, setFiltroPlataforma] = useState<'todas' | Plataforma>('todas');
+  const [filtroCategoria, setFiltroCategoria] = useState<'todas' | 'sem_categoria' | CategoriaProduto>('todas');
   const [ordenacao, setOrdenacao] = useState<OrdenacaoAdmin>('mais_recentes');
 
   const [processandoId, setProcessandoId] = useState<string | null>(null);
@@ -147,9 +155,10 @@ export function AdminProdutosPage({ onNavigate, onToast }: AdminProdutosPageProp
         busca,
         status: filtroStatus,
         plataforma: filtroPlataforma,
+        categoria: filtroCategoria,
         ordenacao,
       }),
-    [produtos, busca, filtroStatus, filtroPlataforma, ordenacao]
+    [produtos, busca, filtroStatus, filtroPlataforma, filtroCategoria, ordenacao]
   );
 
   const produtosAtivosValidos = useMemo(
@@ -465,7 +474,7 @@ export function AdminProdutosPage({ onNavigate, onToast }: AdminProdutosPageProp
           />
         </div>
 
-        <div className="md:col-span-3">
+        <div className="md:col-span-2">
           <label htmlFor="filtro-status" className="sr-only">
             Filtrar por status
           </label>
@@ -484,7 +493,7 @@ export function AdminProdutosPage({ onNavigate, onToast }: AdminProdutosPageProp
           </select>
         </div>
 
-        <div className="md:col-span-3">
+        <div className="md:col-span-2">
           <label htmlFor="filtro-plataforma" className="sr-only">
             Filtrar por plataforma
           </label>
@@ -494,10 +503,34 @@ export function AdminProdutosPage({ onNavigate, onToast }: AdminProdutosPageProp
             onChange={(e) => setFiltroPlataforma(e.target.value as 'todas' | Plataforma)}
             className="w-full rounded-lg border border-[#1E2A20] bg-[#070A07] px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-[#22C55E]"
           >
-            <option value="todas">Todas as plataformas</option>
+            <option value="todas">Todas as lojas</option>
             {PLATAFORMAS.map((platId) => (
               <option key={platId} value={platId}>
                 {PLATAFORMAS_CONFIG[platId].nome}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="md:col-span-2">
+          <label htmlFor="filtro-categoria" className="sr-only">
+            Filtrar por categoria
+          </label>
+          <select
+            id="filtro-categoria"
+            value={filtroCategoria}
+            onChange={(e) =>
+              setFiltroCategoria(
+                e.target.value as 'todas' | 'sem_categoria' | CategoriaProduto
+              )
+            }
+            className="w-full rounded-lg border border-[#1E2A20] bg-[#070A07] px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-[#22C55E]"
+          >
+            <option value="todas">Todas categorias</option>
+            <option value="sem_categoria">Sem categoria salva</option>
+            {CATEGORIAS_PRODUTO.map((catId) => (
+              <option key={catId} value={catId}>
+                {CATEGORIAS_CONFIG[catId].nome}
               </option>
             ))}
           </select>
@@ -573,6 +606,7 @@ export function AdminProdutosPage({ onNavigate, onToast }: AdminProdutosPageProp
               setBusca('');
               setFiltroStatus('todos');
               setFiltroPlataforma('todas');
+              setFiltroCategoria('todas');
               setOrdenacao('mais_recentes');
             }}
             className="text-xs font-semibold text-[#22C55E] hover:underline cursor-pointer"
@@ -628,6 +662,11 @@ export function AdminProdutosPage({ onNavigate, onToast }: AdminProdutosPageProp
                               {produto.destaque && (
                                 <span className="text-[#22C55E] font-medium">
                                   Destaque
+                                </span>
+                              )}
+                              {obterNomeCategoria(obterCategoriaEfetiva(produto)) && (
+                                <span className="px-1.5 py-0.5 rounded bg-[#141D16] text-slate-300 border border-[#1E2A20]">
+                                  {obterNomeCategoria(obterCategoriaEfetiva(produto))}
                                 </span>
                               )}
                               {produto.cupom && (
@@ -798,6 +837,11 @@ export function AdminProdutosPage({ onNavigate, onToast }: AdminProdutosPageProp
                         {produto.cupom && (
                           <span className="font-mono px-1.5 py-0.5 rounded bg-[#122616] text-[#86EFAC] border border-[#22C55E]/30 text-[11px]">
                             {produto.cupom}
+                          </span>
+                        )}
+                        {obterNomeCategoria(obterCategoriaEfetiva(produto)) && (
+                          <span className="px-1.5 py-0.5 rounded bg-[#141D16] text-slate-300 border border-[#1E2A20] text-[11px]">
+                            {obterNomeCategoria(obterCategoriaEfetiva(produto))}
                           </span>
                         )}
                       </div>

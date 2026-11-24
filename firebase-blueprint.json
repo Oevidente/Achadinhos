@@ -98,6 +98,20 @@
           "minLength": 0,
           "maxLength": 64
         },
+        "categoria": {
+          "type": "string",
+          "description": "Categoria opcional do produto para organização na vitrine, ou null.",
+          "enum": [
+            "tech_gamer",
+            "celulares_audio",
+            "casa_cozinha",
+            "moda_beleza",
+            "esporte_lazer",
+            "ferramentas_auto",
+            "presentes_variedades",
+            "outros"
+          ]
+        },
         "criadoEm": {
           "type": "string",
           "format": "date-time",

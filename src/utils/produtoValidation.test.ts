@@ -28,6 +28,7 @@ test('sanitizarCriacaoProduto preenche padrões e detecta plataforma pelo linkOr
   assert.equal(sanitizado.cliques, 0);
   assert.equal(sanitizado.validoAte, null);
   assert.equal(sanitizado.cupom, null);
+  assert.equal(sanitizado.categoria, null);
 });
 
 test('sanitizarCriacaoProduto aplica limites de tamanho e rejeita dados inválidos', () => {
@@ -39,10 +40,12 @@ test('sanitizarCriacaoProduto aplica limites de tamanho e rejeita dados inválid
     linkOriginal: 'https://amzn.to/abc',
     validoAte: '2026-12-31',
     cupom: cupomGigante,
+    categoria: 'tech_gamer',
   });
   assert.equal(sanitizado.titulo.length, PRODUTO_LIMITES.TITULO_MAX);
   assert.equal(sanitizado.validoAte, '2026-12-31');
   assert.equal(sanitizado.cupom?.length, PRODUTO_LIMITES.CUPOM_MAX);
+  assert.equal(sanitizado.categoria, 'tech_gamer');
 
   assert.throws(() =>
     sanitizarCriacaoProduto({
@@ -68,15 +71,25 @@ test('sanitizarCriacaoProduto aplica limites de tamanho e rejeita dados inválid
       validoAte: '31/12/2026',
     })
   );
+
+  assert.throws(() =>
+    sanitizarCriacaoProduto({
+      titulo: 'Item',
+      precoAtual: 10,
+      linkOriginal: 'https://amzn.to/abc',
+      categoria: 'categoria_invalida' as never,
+    })
+  );
 });
 
-test('sanitizarAtualizacaoProduto valida campos parciais incluindo cupom', () => {
+test('sanitizarAtualizacaoProduto valida campos parciais incluindo cupom e categoria', () => {
   const patch = sanitizarAtualizacaoProduto({
     precoAtual: 99.5,
     destaque: true,
     linkAfiliado: '',
     validoAte: '',
     cupom: '  ACHADINHO15 ',
+    categoria: 'casa_cozinha',
   });
   assert.deepEqual(patch, {
     precoAtual: 99.5,
@@ -84,13 +97,17 @@ test('sanitizarAtualizacaoProduto valida campos parciais incluindo cupom', () =>
     linkAfiliado: null,
     validoAte: null,
     cupom: 'ACHADINHO15',
+    categoria: 'casa_cozinha',
   });
 
-  const limpaCupom = sanitizarAtualizacaoProduto({ cupom: '   ' });
-  assert.deepEqual(limpaCupom, { cupom: null });
+  const limpaCupomECategoria = sanitizarAtualizacaoProduto({ cupom: '   ', categoria: null });
+  assert.deepEqual(limpaCupomECategoria, { cupom: null, categoria: null });
 
   assert.throws(() => sanitizarAtualizacaoProduto({ titulo: '' }));
   assert.throws(() => sanitizarAtualizacaoProduto({ validoAte: '2026-02-31' }));
+  assert.throws(() =>
+    sanitizarAtualizacaoProduto({ categoria: 'nao_existe' as never })
+  );
 });
 
 test('validarIdDocumento aceita IDs válidos e rejeita IDs malformados', () => {

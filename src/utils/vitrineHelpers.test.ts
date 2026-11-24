@@ -154,3 +154,43 @@ test('filtrarEOrdenarVitrine encontra produtos pelo código do cupom', () => {
     ['1']
   );
 });
+
+test('filtrarEOrdenarVitrine filtra por categoria (explícita e automática) e busca pelo nome da categoria', () => {
+  const lista = [
+    baseProduto({
+      id: 'ps5',
+      titulo: 'PlayStation 5 Slim',
+      categoria: 'tech_gamer',
+    }),
+    baseProduto({
+      id: 'airfryer',
+      titulo: 'Fritadeira Elétrica Air Fryer',
+      categoria: null,
+    }),
+    baseProduto({
+      id: 'fone',
+      titulo: 'Fone JBL Bluetooth',
+      categoria: null,
+    }),
+  ];
+
+  assert.deepEqual(
+    filtrarEOrdenarVitrine(lista, {
+      busca: '',
+      plataforma: 'todas',
+      categoria: 'casa_cozinha',
+      ordenacao: 'mais_recentes',
+    }).map((p) => p.id),
+    ['airfryer']
+  );
+
+  assert.deepEqual(
+    filtrarEOrdenarVitrine(lista, {
+      busca: 'tech & gamer',
+      plataforma: 'todas',
+      categoria: 'todas',
+      ordenacao: 'mais_recentes',
+    }).map((p) => p.id),
+    ['ps5']
+  );
+});

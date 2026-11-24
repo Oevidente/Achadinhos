@@ -1,9 +1,11 @@
-import type { Plataforma, Produto, StatusProduto } from '../types/produto';
+import type { CategoriaProduto, Plataforma, Produto, StatusProduto } from '../types/produto';
+import { normalizarCategoria, obterCategoriaEfetiva } from './categorias';
 import { normalizarValidoAte, PRODUTO_LIMITES } from './produtoValidation';
 
 export interface ProdutoFormState {
   linkOriginal: string;
   plataforma: Plataforma;
+  categoria: CategoriaProduto | '';
   titulo: string;
   descricao: string;
   imagemUrl: string;
@@ -66,6 +68,7 @@ export function validarFormularioProduto(form: ProdutoFormState): {
   precoOriginalNum: number | null;
   validoAteValor: string | null;
   cupomValor: string | null;
+  categoriaValor: CategoriaProduto | null;
 } {
   const erros: ProdutoFormErros = {};
 
@@ -123,6 +126,7 @@ export function validarFormularioProduto(form: ProdutoFormState): {
     erros.cupom = `O cupom deve ter no máximo ${PRODUTO_LIMITES.CUPOM_MAX} caracteres.`;
   }
   const cupomValor = cupomLimpo ? cupomLimpo.slice(0, PRODUTO_LIMITES.CUPOM_MAX) : null;
+  const categoriaValor = normalizarCategoria(form.categoria);
 
   return {
     valido: Object.keys(erros).length === 0,
@@ -131,6 +135,7 @@ export function validarFormularioProduto(form: ProdutoFormState): {
     precoOriginalNum,
     validoAteValor,
     cupomValor,
+    categoriaValor,
   };
 }
 
@@ -140,6 +145,7 @@ export interface FiltrosAdminProdutos {
   busca: string;
   status: 'todos' | StatusProduto;
   plataforma: 'todas' | Plataforma;
+  categoria?: 'todas' | 'sem_categoria' | CategoriaProduto;
   ordenacao?: OrdenacaoAdmin;
 }
 
@@ -168,8 +174,17 @@ export function filtrarProdutosAdmin(
     if (filtros.plataforma !== 'todas' && produto.plataforma !== filtros.plataforma) {
       return false;
     }
-    if (termo && !produto.titulo.toLowerCase().includes(termo)) {
-      return false;
+    if (filtros.categoria && filtros.categoria !== 'todas') {
+      if (filtros.categoria === 'sem_categoria') {
+        if (produto.categoria) return false;
+      } else if (obterCategoriaEfetiva(produto) !== filtros.categoria) {
+        return false;
+      }
+    }
+    if (termo) {
+      const noTitulo = produto.titulo.toLowerCase().includes(termo);
+      const noCupom = (produto.cupom ?? '').toLowerCase().includes(termo);
+      if (!noTitulo && !noCupom) return false;
     }
     return true;
   });

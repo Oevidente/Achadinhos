@@ -9,7 +9,7 @@
 2. **Strict Schema & Size Enforcement**:
    - Every `/produtos/{produtoId}` document must contain exact required/allowed keys (`hasAll` + `hasOnly`) with bounded string lengths (`titulo <= 200`, `descricao <= 2000`, `imagemUrl <= 2048`, `linkOriginal <= 2048`, `linkAfiliado <= 2048`, optional `validoAte` matching `^\d{4}-\d{2}-\d{2}$`, optional `cupom <= 64`).
    - Numeric invariants: `precoAtual >= 0`, `precoOriginal == null || precoOriginal >= 0`, `cliques >= 0`.
-   - Enum invariants: `plataforma` in 9 allowed marketplaces, `status` in `['ativo', 'inativo', 'expirado']`, `origemDados` in `['manual', 'automatico']`, `moeda` in `['BRL', 'USD', 'EUR']`.
+   - Enum invariants: `plataforma` in 9 allowed marketplaces, optional `categoria` (`null` or in 8 allowed categories), `status` in `['ativo', 'inativo', 'expirado']`, `origemDados` in `['manual', 'automatico']`, `moeda` in `['BRL', 'USD', 'EUR']`.
 3. **Temporal & Immutability Integrity**:
    - `criadoEm` and `atualizadoEm` must equal `request.time` on `create`.
    - On `update`, `criadoEm` is immutable (`incoming().criadoEm == existing().criadoEm`) and `atualizadoEm == request.time`.
