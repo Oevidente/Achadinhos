@@ -7,7 +7,7 @@
    - Visitors may update **only** the `cliques` field and strictly by `+1` (`incoming().cliques == existing().cliques + 1`).
    - Only authenticated users with a verified email (`request.auth.token.email_verified == true`) listed in `adminEmails()` may create, delete, or update any other fields in `/produtos`.
 2. **Strict Schema & Size Enforcement**:
-   - Every `/produtos/{produtoId}` document must contain exact required/allowed keys (`hasAll` + `hasOnly`) with bounded string lengths (`titulo <= 200`, `descricao <= 2000`, `imagemUrl <= 2048`, `linkOriginal <= 2048`, `linkAfiliado <= 2048`, optional `validoAte` matching `^\d{4}-\d{2}-\d{2}$`).
+   - Every `/produtos/{produtoId}` document must contain exact required/allowed keys (`hasAll` + `hasOnly`) with bounded string lengths (`titulo <= 200`, `descricao <= 2000`, `imagemUrl <= 2048`, `linkOriginal <= 2048`, `linkAfiliado <= 2048`, optional `validoAte` matching `^\d{4}-\d{2}-\d{2}$`, optional `cupom <= 64`).
    - Numeric invariants: `precoAtual >= 0`, `precoOriginal == null || precoOriginal >= 0`, `cliques >= 0`.
    - Enum invariants: `plataforma` in 9 allowed marketplaces, `status` in `['ativo', 'inativo', 'expirado']`, `origemDados` in `['manual', 'automatico']`, `moeda` in `['BRL', 'USD', 'EUR']`.
 3. **Temporal & Immutability Integrity**:

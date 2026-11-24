@@ -624,10 +624,15 @@ export function AdminProdutosPage({ onNavigate, onToast }: AdminProdutosPageProp
                             <p className="text-sm font-medium text-white truncate">
                               {produto.titulo}
                             </p>
-                            <div className="flex items-center gap-2 text-[11px]">
+                            <div className="flex flex-wrap items-center gap-2 text-[11px]">
                               {produto.destaque && (
                                 <span className="text-[#22C55E] font-medium">
                                   Destaque
+                                </span>
+                              )}
+                              {produto.cupom && (
+                                <span className="font-mono px-1.5 py-0.5 rounded bg-[#122616] text-[#86EFAC] border border-[#22C55E]/30">
+                                  {produto.cupom}
                                 </span>
                               )}
                               {validadeFmt && (
@@ -790,6 +795,11 @@ export function AdminProdutosPage({ onNavigate, onToast }: AdminProdutosPageProp
                         <span className="text-slate-400 tabular-nums">
                           {formatarDataProduto(produto.criadoEm)}
                         </span>
+                        {produto.cupom && (
+                          <span className="font-mono px-1.5 py-0.5 rounded bg-[#122616] text-[#86EFAC] border border-[#22C55E]/30 text-[11px]">
+                            {produto.cupom}
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>

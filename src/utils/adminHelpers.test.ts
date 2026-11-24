@@ -24,6 +24,7 @@ const formValidoBase: ProdutoFormState = {
   status: 'ativo',
   destaque: false,
   validoAte: '',
+  cupom: '',
 };
 
 test('isEmailAdm valida e-mails ignorando maiúsculas e espaços', () => {
@@ -40,12 +41,28 @@ test('isHttpsUrl aceita apenas URLs https válidas', () => {
   assert.equal(isHttpsUrl('amazon.com.br/dp/B123'), false);
 });
 
-test('validarFormularioProduto exige https, título, preço > 0, preço original >= atual, imagem válida e validoAte opcional', () => {
-  const ok = validarFormularioProduto({ ...formValidoBase, validoAte: '2026-12-25' });
+test('validarFormularioProduto exige https, título, preço > 0, preço original >= atual, imagem válida e trata validoAte e cupom opcionais', () => {
+  const ok = validarFormularioProduto({
+    ...formValidoBase,
+    validoAte: '2026-12-25',
+    cupom: '  DECO10  ',
+  });
   assert.equal(ok.valido, true);
   assert.equal(ok.precoAtualNum, 89.9);
   assert.equal(ok.precoOriginalNum, 149.9);
   assert.equal(ok.validoAteValor, '2026-12-25');
+  assert.equal(ok.cupomValor, 'DECO10');
+
+  const semCupom = validarFormularioProduto({ ...formValidoBase, cupom: '   ' });
+  assert.equal(semCupom.valido, true);
+  assert.equal(semCupom.cupomValor, null);
+
+  const cupomLongo = validarFormularioProduto({
+    ...formValidoBase,
+    cupom: 'A'.repeat(65),
+  });
+  assert.equal(cupomLongo.valido, false);
+  assert.ok(cupomLongo.erros.cupom);
 
   const invalido = validarFormularioProduto({
     ...formValidoBase,

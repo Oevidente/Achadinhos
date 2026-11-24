@@ -14,6 +14,7 @@ export const PRODUTO_LIMITES = {
   TITULO_MAX: 200,
   DESCRICAO_MAX: 2000,
   URL_MAX: 2048,
+  CUPOM_MAX: 64,
   MOEDAS_PERMITIDAS: ['BRL', 'USD', 'EUR'] as const,
   ID_REGEX: /^[a-zA-Z0-9_-]{1,128}$/,
   DATA_ISO_REGEX: /^\d{4}-\d{2}-\d{2}$/,
@@ -34,6 +35,7 @@ export interface ProdutoPayloadSanitizado {
   destaque: boolean;
   cliques: number;
   validoAte: string | null;
+  cupom: string | null;
 }
 
 export function validarIdDocumento(id: string): string {
@@ -76,6 +78,12 @@ export function normalizarValidoAte(valor?: string | null): string | null {
     throw new Error('Data de validade inválida.');
   }
   return limpo;
+}
+
+export function normalizarCupom(valor?: string | null): string | null {
+  if (valor === null || valor === undefined) return null;
+  const limpo = valor.trim().slice(0, PRODUTO_LIMITES.CUPOM_MAX);
+  return limpo || null;
 }
 
 export function sanitizarCriacaoProduto(input: CriarProdutoInput): ProdutoPayloadSanitizado {
@@ -133,6 +141,7 @@ export function sanitizarCriacaoProduto(input: CriarProdutoInput): ProdutoPayloa
     destaque: Boolean(input.destaque ?? false),
     cliques,
     validoAte: normalizarValidoAte(input.validoAte),
+    cupom: normalizarCupom(input.cupom),
   };
 }
 
@@ -225,6 +234,10 @@ export function sanitizarAtualizacaoProduto(
 
   if (input.validoAte !== undefined) {
     resultado.validoAte = normalizarValidoAte(input.validoAte);
+  }
+
+  if (input.cupom !== undefined) {
+    resultado.cupom = normalizarCupom(input.cupom);
   }
 
   return resultado;

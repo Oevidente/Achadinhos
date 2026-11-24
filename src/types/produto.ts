@@ -36,6 +36,7 @@ export interface Produto {
   destaque: boolean;
   cliques: number;
   validoAte?: string | null;
+  cupom?: string | null;
   criadoEm: Timestamp | Date | null;
   atualizadoEm: Timestamp | Date | null;
 }
@@ -55,6 +56,7 @@ export interface CriarProdutoInput {
   destaque?: boolean;
   cliques?: number;
   validoAte?: string | null;
+  cupom?: string | null;
 }
 
 export type AtualizarProdutoInput = Partial<Omit<CriarProdutoInput, 'cliques'>> & {

@@ -13,6 +13,7 @@ export interface ProdutoFormState {
   status: StatusProduto;
   destaque: boolean;
   validoAte: string;
+  cupom: string;
 }
 
 export type ProdutoFormErros = Partial<Record<keyof ProdutoFormState, string>>;
@@ -64,6 +65,7 @@ export function validarFormularioProduto(form: ProdutoFormState): {
   precoAtualNum: number;
   precoOriginalNum: number | null;
   validoAteValor: string | null;
+  cupomValor: string | null;
 } {
   const erros: ProdutoFormErros = {};
 
@@ -116,12 +118,19 @@ export function validarFormularioProduto(form: ProdutoFormState): {
     }
   }
 
+  const cupomLimpo = (form.cupom ?? '').trim();
+  if (cupomLimpo.length > PRODUTO_LIMITES.CUPOM_MAX) {
+    erros.cupom = `O cupom deve ter no máximo ${PRODUTO_LIMITES.CUPOM_MAX} caracteres.`;
+  }
+  const cupomValor = cupomLimpo ? cupomLimpo.slice(0, PRODUTO_LIMITES.CUPOM_MAX) : null;
+
   return {
     valido: Object.keys(erros).length === 0,
     erros,
     precoAtualNum,
     precoOriginalNum,
     validoAteValor,
+    cupomValor,
   };
 }
 

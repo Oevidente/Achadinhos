@@ -1,16 +1,17 @@
 /**
- * Serviço de extração de metadados de links de produtos via Google Apps Script.
+ * Serviço de extração de metadados de links de produtos via Google Apps Script + fallback local pela URL.
  *
- * Expectativa realista:
- * - Mercado Livre, Magalu: costuma funcionar bem para título, imagem e preço.
- * - Amazon: funciona em parte; às vezes bloqueia. O caminho oficial para dados e preço é a API de afiliados (PA-API), que exige conta de afiliado aprovada.
- * - Shopee e TikTok Shop: carregam o conteúdo por JavaScript e bloqueiam leitura automática com frequência. O fallback manual do painel é o plano B.
- * - Preço é o dado menos confiável de extrair. Por isso o aviso de confiança e a revisão do ADM.
+ * 100% gratuito e compatível com GitHub Pages:
+ * - Mercado Livre (links /social/, /p/MLB, meli.la): extrai título, imagem, preço atual e preço original.
+ * - Shopee (shopee.com.br, s.shopee.com.br, shp.ee): usa User-Agent WhatsApp para obter título, descrição e imagem SSR + slug da URL.
+ * - TikTok Shop (vt.tiktok.com, tiktok.com/view/product): captura parâmetro `og_info` nos redirecionamentos para obter título e imagem mesmo com Security Check.
+ * - Caso `VITE_EXTRATOR_URL` não esteja configurado, extrai dados disponíveis na própria URL (slug / og_info) quando possível.
  */
 
 import { APP_CONFIG, extratorConfig } from '../config';
 import { isHttpsUrl } from '../utils/adminHelpers';
 import {
+  extrairMetadadosPelaUrlLocal,
   isDominioPermitidoExtrator,
   montarUrlRequisicaoExtrator,
   normalizarRespostaExtrator,
@@ -32,9 +33,14 @@ export async function extrairDadosDoLink(url: string): Promise<ExtratorResultado
     );
   }
 
+  const fallbackLocal = extrairMetadadosPelaUrlLocal(urlLimpa);
+
   if (!extratorConfig.url || !extratorConfig.token) {
+    if (fallbackLocal) {
+      return fallbackLocal;
+    }
     throw new Error(
-      'Extrator ainda não configurado. Defina VITE_EXTRATOR_URL e VITE_EXTRATOR_TOKEN após implantar o Google Apps Script.'
+      'Extrator remoto ainda não configurado. Defina VITE_EXTRATOR_URL e VITE_EXTRATOR_TOKEN após implantar o Google Apps Script ou preencha os dados manualmente.'
     );
   }
 
@@ -56,6 +62,7 @@ export async function extrairDadosDoLink(url: string): Promise<ExtratorResultado
     });
 
     if (!resposta.ok) {
+      if (fallbackLocal) return fallbackLocal;
       throw new Error(`O serviço extrator respondeu com erro HTTP ${resposta.status}.`);
     }
 
@@ -63,11 +70,15 @@ export async function extrairDadosDoLink(url: string): Promise<ExtratorResultado
     try {
       payload = await resposta.json();
     } catch {
+      if (fallbackLocal) return fallbackLocal;
       throw new Error('O serviço extrator retornou uma resposta inválida.');
     }
 
     return normalizarRespostaExtrator(payload, urlLimpa);
   } catch (error) {
+    if (fallbackLocal) {
+      return fallbackLocal;
+    }
     if (error instanceof DOMException && error.name === 'AbortError') {
       throw new Error(
         'Tempo limite esgotado (15s) ao consultar a loja. Preencha os dados manualmente.'

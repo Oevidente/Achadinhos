@@ -1,15 +1,19 @@
 /**
- * Web App do Google Apps Script — Extrator de dados de produtos para Achadinhos Hub
+ * Web App do Google Apps Script — Extrator de dados de produtos para Achadinhos do Deco
  *
- * Expectativa realista sobre extração automática:
- * - Mercado Livre, Magalu: costuma funcionar bem para título, imagem e preço.
- * - Amazon: funciona em parte; às vezes bloqueia. O caminho oficial para dados e preço é a API de afiliados (PA-API), que exige conta de afiliado aprovada.
- * - Shopee e TikTok Shop: carregam o conteúdo por JavaScript e bloqueiam leitura automática com frequência. O fallback manual do painel é o plano B.
- * - Preço é o dado menos confiável de extrair. Por isso o aviso de confiança e a revisão do ADM.
+ * Estratégia por plataforma (100% gratuita, sem IA):
+ * - Mercado Livre (incluindo links /social/... e meli.la): extrai título, imagem, preço atual e preço original (previous_price) do JSON embutido + meta tags.
+ * - Shopee (incluindo s.shopee.com.br e shp.ee): usa User-Agent WhatsApp para receber as meta tags SSR (título, descrição, imagem) e tenta extrair preço se disponível.
+ * - TikTok Shop (incluindo vt.tiktok.com): segue redirecionamentos manualmente para capturar o parâmetro `og_info` (título e imagem) mesmo quando há Security Check, além de tentar preço no HTML.
+ * - Amazon, Magalu, AliExpress, Americanas, KaBuM!: JSON-LD + meta tags + fallback de moeda em texto + fallback de User-Agent.
  */
 
 var TOKEN_SECRETO = 'TROQUE_POR_UM_TOKEN_FORTE_AQUI';
 var CACHE_EXPIRACAO_SEGUNDOS = 6 * 60 * 60; // 6 horas
+
+var UA_CHROME =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
+var UA_WHATSAPP = 'WhatsApp/2.23.20.0 A';
 
 var PLATAFORMAS_DOMINIOS = {
   shopee: ['shopee.com.br', 's.shopee.com.br', 'shopee.com', 'shp.ee'],
@@ -58,57 +62,91 @@ function doGet(e) {
       return ContentService.createTextOutput(cached).setMimeType(ContentService.MimeType.JSON);
     }
 
-    var resposta = UrlFetchApp.fetch(url, {
-      method: 'get',
-      followRedirects: true,
-      muteHttpExceptions: true,
-      headers: {
-        'User-Agent':
-          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
-        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Language': 'pt-BR,pt;q=0.9,en;q=0.8',
-      },
-    });
+    // Seleciona a ordem de User-Agents mais eficaz para cada plataforma
+    var uasParaTentar =
+      plataformaInicial === 'shopee'
+        ? [UA_WHATSAPP, UA_CHROME]
+        : [UA_CHROME, UA_WHATSAPP];
 
-    var statusCode = resposta.getResponseCode();
-    if (statusCode === 403 || statusCode === 429 || statusCode === 503) {
-      return responderJson({
-        ok: false,
-        erro:
-          'A loja bloqueou a leitura automática (HTTP ' +
-          statusCode +
-          '). Preencha os dados manualmente.',
-      });
-    }
-    if (statusCode < 200 || statusCode >= 400) {
-      return responderJson({
-        ok: false,
-        erro: 'Não foi possível acessar a página da loja (HTTP ' + statusCode + ').',
-      });
+    var resultadoBusca = null;
+    var extraido = null;
+    var ultimoErroHttp = 0;
+    var bloqueadoPorCaptcha = false;
+
+    for (var u = 0; u < uasParaTentar.length; u++) {
+      var tentativa = seguirRedirecionamentos_(url, uasParaTentar[u], 6);
+      ultimoErroHttp = tentativa.statusCode;
+
+      if (tentativa.statusCode >= 200 && tentativa.statusCode < 400) {
+        var html = tentativa.html || '';
+        var plataformaFinal = detectarPlataformaFinal_(
+          tentativa.urlsVisitadas,
+          html,
+          plataformaInicial
+        );
+        var ehCaptcha = html.length < 200 || detectarBloqueioCaptcha_(html);
+
+        var candidato = extrairMetadadosProduto_(
+          html,
+          plataformaFinal,
+          tentativa.urlsVisitadas
+        );
+
+        if (candidato && candidato.titulo) {
+          extraido = candidato;
+          resultadoBusca = tentativa;
+          if (ehCaptcha) {
+            bloqueadoPorCaptcha = true;
+          }
+          // Se já temos título + preço (ou não é a primeira tentativa), encerra
+          if (extraido.precoAtual !== null || u === uasParaTentar.length - 1) {
+            break;
+          }
+          // Caso contrário (ex.: faltou preço), tenta o segundo UA se for ML ou genérico
+          if (plataformaFinal === 'shopee' || plataformaFinal === 'tiktok_shop') {
+            break;
+          }
+        } else if (ehCaptcha) {
+          bloqueadoPorCaptcha = true;
+        }
+      } else {
+        resultadoBusca = tentativa;
+      }
     }
 
-    var html = resposta.getContentText('UTF-8') || '';
-    if (!html || html.length < 200) {
-      return responderJson({
-        ok: false,
-        erro: 'A loja retornou uma página vazia ou protegida. Preencha os dados manualmente.',
-      });
-    }
-
-    if (detectarBloqueioCaptcha_(html)) {
-      return responderJson({
-        ok: false,
-        erro: 'A loja exibiu verificação anti-robô (captcha). Preencha os dados manualmente.',
-      });
-    }
-
-    var extraido = extrairMetadadosProduto_(html, plataformaInicial);
-    if (!extraido.titulo) {
+    if (!extraido || !extraido.titulo) {
+      if (ultimoErroHttp === 403 || ultimoErroHttp === 429 || ultimoErroHttp === 503) {
+        return responderJson({
+          ok: false,
+          erro:
+            'A loja bloqueou a leitura automática (HTTP ' +
+            ultimoErroHttp +
+            '). Preencha os dados manualmente.',
+        });
+      }
+      if (bloqueadoPorCaptcha) {
+        return responderJson({
+          ok: false,
+          erro: 'A loja exibiu verificação anti-robô (captcha). Preencha os dados manualmente.',
+        });
+      }
+      if (ultimoErroHttp > 0 && (ultimoErroHttp < 200 || ultimoErroHttp >= 400)) {
+        return responderJson({
+          ok: false,
+          erro: 'Não foi possível acessar a página da loja (HTTP ' + ultimoErroHttp + ').',
+        });
+      }
       return responderJson({
         ok: false,
         erro:
           'Não foi possível encontrar o título do produto na página (conteúdo dinâmico ou bloqueado). Preencha manualmente.',
       });
+    }
+
+    if (bloqueadoPorCaptcha && extraido.precoAtual === null) {
+      extraido.avisos.push(
+        'A loja exibiu verificação anti-robô para o preço, mas título/imagem foram recuperados.'
+      );
     }
 
     var jsonStr = JSON.stringify(extraido);
@@ -120,6 +158,113 @@ function doGet(e) {
       erro: 'Erro interno ao processar o link: ' + (err && err.message ? err.message : String(err)),
     });
   }
+}
+
+function seguirRedirecionamentos_(urlInicial, userAgent, maxHops) {
+  var atual = urlInicial;
+  var urlsVisitadas = [urlInicial];
+  var cookieJar = {};
+
+  for (var hop = 0; hop <= maxHops; hop++) {
+    var headers = {
+      'User-Agent': userAgent,
+      Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      'Accept-Language': 'pt-BR,pt;q=0.9,en;q=0.8',
+    };
+    var cookieHeader = montarCookieHeader_(cookieJar);
+    if (cookieHeader) {
+      headers.Cookie = cookieHeader;
+    }
+
+    var resp = UrlFetchApp.fetch(atual, {
+      method: 'get',
+      followRedirects: false,
+      muteHttpExceptions: true,
+      headers: headers,
+    });
+
+    var respHeaders = resp.getAllHeaders ? resp.getAllHeaders() : resp.getHeaders();
+    acumularCookies_(cookieJar, respHeaders);
+
+    var status = resp.getResponseCode();
+    if (status >= 300 && status < 400) {
+      var location = obterHeaderCaseInsensitive_(respHeaders, 'location');
+      if (location) {
+        var proximo = resolverUrlRelativa_(atual, String(location).trim());
+        if (proximo && urlsVisitadas.indexOf(proximo) === -1) {
+          urlsVisitadas.push(proximo);
+          atual = proximo;
+          continue;
+        }
+      }
+    }
+
+    return {
+      statusCode: status,
+      urlFinal: atual,
+      urlsVisitadas: urlsVisitadas,
+      html: resp.getContentText('UTF-8') || '',
+    };
+  }
+
+  return {
+    statusCode: 200,
+    urlFinal: atual,
+    urlsVisitadas: urlsVisitadas,
+    html: '',
+  };
+}
+
+function obterHeaderCaseInsensitive_(headers, nome) {
+  if (!headers) return '';
+  var alvo = nome.toLowerCase();
+  var keys = Object.keys(headers);
+  for (var i = 0; i < keys.length; i++) {
+    if (keys[i].toLowerCase() === alvo) {
+      var val = headers[keys[i]];
+      return Array.isArray(val) ? val[0] : val;
+    }
+  }
+  return '';
+}
+
+function acumularCookies_(jar, headers) {
+  if (!headers) return;
+  var keys = Object.keys(headers);
+  for (var i = 0; i < keys.length; i++) {
+    if (keys[i].toLowerCase() === 'set-cookie') {
+      var raw = headers[keys[i]];
+      var list = Array.isArray(raw) ? raw : [raw];
+      for (var j = 0; j < list.length; j++) {
+        var parte = String(list[j] || '').split(';')[0].trim();
+        var eq = parte.indexOf('=');
+        if (eq > 0) {
+          jar[parte.slice(0, eq).trim()] = parte.slice(eq + 1).trim();
+        }
+      }
+    }
+  }
+}
+
+function montarCookieHeader_(jar) {
+  var pares = [];
+  var keys = Object.keys(jar);
+  for (var i = 0; i < keys.length; i++) {
+    pares.push(keys[i] + '=' + jar[keys[i]]);
+  }
+  return pares.join('; ');
+}
+
+function resolverUrlRelativa_(base, destino) {
+  if (!destino) return '';
+  if (/^https?:\/\//i.test(destino)) return destino;
+  if (destino.indexOf('//') === 0) return 'https:' + destino;
+  var originMatch = base.match(/^(https?:\/\/[^\/?#]+)/i);
+  if (!originMatch) return '';
+  var origin = originMatch[1];
+  if (destino.charAt(0) === '/') return origin + destino;
+  var pathBase = base.replace(/[?#].*$/, '').replace(/\/[^\/]*$/, '/');
+  return pathBase + destino;
 }
 
 function responderJson(obj) {
@@ -136,11 +281,11 @@ function gerarChaveCache_(url) {
       return ('0' + v.toString(16)).slice(-2);
     })
     .join('');
-  return 'prod_' + hex;
+  return 'prod_v2_' + hex;
 }
 
 function extrairHostname_(url) {
-  var match = url.match(/^https:\/\/([^\/:?#]+)/i);
+  var match = url.match(/^https?:\/\/([^\/:?#]+)/i);
   if (!match) return '';
   return match[1].toLowerCase().replace(/^www\./, '');
 }
@@ -161,6 +306,20 @@ function detectarPlataformaPorHost_(host) {
   return 'outra';
 }
 
+function detectarPlataformaFinal_(urlsVisitadas, html, fallback) {
+  for (var i = urlsVisitadas.length - 1; i >= 0; i--) {
+    var det = detectarPlataformaPorHost_(extrairHostname_(urlsVisitadas[i]));
+    if (det !== 'outra') return det;
+  }
+  var urlCanonica =
+    extrairMetaTag_(html, 'property', 'og:url') || extrairLinkRel_(html, 'canonical');
+  if (urlCanonica && urlCanonica.indexOf('https://') === 0) {
+    var detCanon = detectarPlataformaPorHost_(extrairHostname_(urlCanonica));
+    if (detCanon !== 'outra') return detCanon;
+  }
+  return fallback;
+}
+
 function detectarBloqueioCaptcha_(html) {
   var amostra = html.slice(0, 12000).toLowerCase();
   var possuiProduto =
@@ -175,6 +334,7 @@ function detectarBloqueioCaptcha_(html) {
     'verify you are human',
     'acesso negado',
     'security check',
+    'drag the puzzle piece',
   ];
   for (var i = 0; i < sinais.length; i++) {
     if (amostra.indexOf(sinais[i]) !== -1) {
@@ -184,7 +344,7 @@ function detectarBloqueioCaptcha_(html) {
   return false;
 }
 
-function extrairMetadadosProduto_(html, plataformaFallback) {
+function extrairMetadadosProduto_(html, plataforma, urlsVisitadas) {
   var avisos = [];
   var titulo = '';
   var descricao = '';
@@ -194,30 +354,58 @@ function extrairMetadadosProduto_(html, plataformaFallback) {
   var moeda = 'BRL';
   var confiancaPreco = 'nao_encontrado';
 
-  // Atualiza plataforma caso o link curto tenha redirecionado para um canonical conhecido
-  var urlCanonica =
-    extrairMetaTag_(html, 'property', 'og:url') || extrairLinkRel_(html, 'canonical');
-  var plataforma = plataformaFallback;
-  if (urlCanonica && urlCanonica.indexOf('https://') === 0) {
-    var hostCanonico = extrairHostname_(urlCanonica);
-    var detectada = detectarPlataformaPorHost_(hostCanonico);
-    if (detectada !== 'outra') {
-      plataforma = detectada;
+  var urlFinal =
+    urlsVisitadas && urlsVisitadas.length > 0 ? urlsVisitadas[urlsVisitadas.length - 1] : '';
+
+  // 0. Extração específica por plataforma (maior precisão)
+  if (plataforma === 'tiktok_shop') {
+    var infoTikTok = extrairOgInfoDeUrls_(urlsVisitadas || []);
+    if (infoTikTok.titulo) titulo = infoTikTok.titulo;
+    if (infoTikTok.imagemUrl) imagemUrl = infoTikTok.imagemUrl;
+    var precoTikTok = extrairPrecoJsonEmbutido_(html, ['sku_price', 'real_price', 'sale_price']);
+    if (precoTikTok !== null) {
+      precoAtual = precoTikTok;
+      confiancaPreco = 'alta';
     }
   }
 
-  // 1. Prioridade: JSON-LD (@type: Product)
+  if (plataforma === 'mercado_livre') {
+    var ml = extrairDadosMercadoLivre_(html);
+    if (ml.titulo) titulo = ml.titulo;
+    if (ml.precoAtual !== null) {
+      precoAtual = ml.precoAtual;
+      confiancaPreco = 'alta';
+    }
+    if (ml.precoOriginal !== null && ml.precoOriginal > (precoAtual || 0)) {
+      precoOriginal = ml.precoOriginal;
+    }
+    if (ml.moeda) moeda = ml.moeda;
+    if (ml.imagemUrl) imagemUrl = ml.imagemUrl;
+  }
+
+  // 1. JSON-LD (@type: Product)
   var produtoJsonLd = extrairJsonLdProduto_(html);
   if (produtoJsonLd) {
-    if (produtoJsonLd.name) titulo = limparTexto_(String(produtoJsonLd.name));
-    if (produtoJsonLd.description) descricao = limparTexto_(String(produtoJsonLd.description));
-    imagemUrl = extrairImagemDeJsonLd_(produtoJsonLd.image);
+    if (!titulo && produtoJsonLd.name) titulo = limparTexto_(String(produtoJsonLd.name));
+    if (!descricao && produtoJsonLd.description) {
+      descricao = limparTexto_(String(produtoJsonLd.description));
+    }
+    if (!imagemUrl) imagemUrl = extrairImagemDeJsonLd_(produtoJsonLd.image);
 
     var oferta = extrairOfertaJsonLd_(produtoJsonLd.offers);
     if (oferta && oferta.preco !== null) {
-      precoAtual = oferta.preco;
-      moeda = oferta.moeda || 'BRL';
-      confiancaPreco = 'alta';
+      if (precoAtual === null) {
+        precoAtual = oferta.preco;
+        moeda = oferta.moeda || moeda;
+        confiancaPreco = 'alta';
+      }
+      if (
+        precoOriginal === null &&
+        oferta.precoOriginal !== null &&
+        oferta.precoOriginal > precoAtual
+      ) {
+        precoOriginal = oferta.precoOriginal;
+      }
     }
   }
 
@@ -225,7 +413,8 @@ function extrairMetadadosProduto_(html, plataformaFallback) {
   if (!titulo) {
     titulo =
       extrairMetaTag_(html, 'property', 'og:title') ||
-      extrairMetaTag_(html, 'name', 'twitter:title');
+      extrairMetaTag_(html, 'name', 'twitter:title') ||
+      extrairMetaTag_(html, 'name', 'title');
   }
   if (!descricao) {
     descricao =
@@ -236,7 +425,16 @@ function extrairMetadadosProduto_(html, plataformaFallback) {
   if (!imagemUrl) {
     imagemUrl =
       extrairMetaTag_(html, 'property', 'og:image') ||
-      extrairMetaTag_(html, 'name', 'twitter:image');
+      extrairMetaTag_(html, 'name', 'twitter:image') ||
+      extrairMetaTag_(html, 'name', 'image');
+  }
+
+  // Ignora og:title genérico de captcha/hub do TikTok quando já temos og_info
+  if (
+    plataforma === 'tiktok_shop' &&
+    (titulo === 'TikTok Shop' || titulo === 'Security Check')
+  ) {
+    titulo = '';
   }
 
   if (precoAtual === null) {
@@ -257,18 +455,57 @@ function extrairMetadadosProduto_(html, plataformaFallback) {
     }
   }
 
-  // 3. Último recurso: <title>
+  // 3. Fallback de preço em texto (ex.: Mercado Livre og:title / og:description "- R$ 371,07")
+  if (precoAtual === null) {
+    var precoTexto =
+      extrairPrecoDeTextoBrl_(titulo) ||
+      extrairPrecoDeTextoBrl_(extrairMetaTag_(html, 'property', 'og:title')) ||
+      extrairPrecoDeTextoBrl_(descricao);
+    if (precoTexto !== null) {
+      precoAtual = precoTexto;
+      confiancaPreco = 'alta';
+    }
+  }
+
+  // 4. Fallback de título: <title> (desde que não seja página de Security Check) ou slug da URL
   if (!titulo) {
     var titleMatch = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
     if (titleMatch && titleMatch[1]) {
-      titulo = limparTexto_(titleMatch[1]);
-      avisos.push('Título extraído da tag <title>; verifique se precisa de ajuste.');
+      var titleCandidato = limparTexto_(titleMatch[1]);
+      var lowerTitle = titleCandidato.toLowerCase();
+      if (
+        lowerTitle !== 'security check' &&
+        lowerTitle !== 'tiktok shop' &&
+        lowerTitle !== 'just a moment...'
+      ) {
+        titulo = titleCandidato;
+        avisos.push('Título extraído da tag <title>; verifique se precisa de ajuste.');
+      }
     }
+  }
+
+  if (!titulo && urlFinal) {
+    titulo = extrairTituloDoSlugUrl_(urlFinal, plataforma);
+    if (titulo) {
+      avisos.push('Título aproximado extraído do endereço do link; revise antes de salvar.');
+    }
+  }
+
+  // Limpeza de sufixos/preços no título e descrição
+  titulo = limparTituloMarketplace_(titulo, plataforma);
+  if (plataforma === 'shopee') {
+    descricao = limparDescricaoShopee_(descricao);
   }
 
   if (precoAtual === null) {
     confiancaPreco = 'nao_encontrado';
-    avisos.push('Não foi possível identificar o preço automaticamente.');
+    if (plataforma === 'shopee' || plataforma === 'tiktok_shop') {
+      avisos.push(
+        'A loja não exibe o preço na leitura automática; preencha o valor atual manualmente.'
+      );
+    } else {
+      avisos.push('Não foi possível identificar o preço automaticamente.');
+    }
   }
 
   return {
@@ -283,6 +520,149 @@ function extrairMetadadosProduto_(html, plataformaFallback) {
     confiancaPreco: confiancaPreco,
     avisos: avisos,
   };
+}
+
+function extrairDadosMercadoLivre_(html) {
+  var res = {
+    titulo: '',
+    precoAtual: null,
+    precoOriginal: null,
+    moeda: 'BRL',
+    imagemUrl: '',
+  };
+  if (!html) return res;
+
+  // JSON de componentes (/social/... e /p/MLB...)
+  var currentPriceMatch = html.match(
+    /"current_price"\s*:\s*\{\s*"value"\s*:\s*([\d.]+)(?:\s*,\s*"currency"\s*:\s*"([A-Z]{3})")?/i
+  );
+  if (currentPriceMatch && currentPriceMatch[1]) {
+    var cur = normalizarNumeroPreco_(currentPriceMatch[1]);
+    if (cur !== null) {
+      res.precoAtual = cur;
+      if (currentPriceMatch[2]) res.moeda = currentPriceMatch[2].toUpperCase();
+    }
+  }
+
+  var prevPriceMatch = html.match(/"previous_price"\s*:\s*\{\s*"value"\s*:\s*([\d.]+)/i);
+  if (prevPriceMatch && prevPriceMatch[1]) {
+    var prev = normalizarNumeroPreco_(prevPriceMatch[1]);
+    if (prev !== null) {
+      res.precoOriginal = prev;
+    }
+  }
+
+  var titleJsonMatch = html.match(/"type"\s*:\s*"title"[\s\S]{0,120}?"text"\s*:\s*"([^"]{3,240})"/i);
+  if (titleJsonMatch && titleJsonMatch[1]) {
+    res.titulo = limparTexto_(unescapeJsonBasico_(titleJsonMatch[1]));
+  }
+
+  // Fallback para páginas padrão de produto ML (state JSON / schema)
+  if (res.precoAtual === null) {
+    var tracksMatch = html.match(/"tracks"\s*:\s*\{\s*"price"\s*:[\s\S]{0,250}?"price"\s*:\s*([\d.]+)/i);
+    if (tracksMatch && tracksMatch[1]) {
+      res.precoAtual = normalizarNumeroPreco_(tracksMatch[1]);
+    }
+  }
+
+  return res;
+}
+
+function extrairOgInfoDeUrls_(urls) {
+  var res = { titulo: '', imagemUrl: '' };
+  for (var i = urls.length - 1; i >= 0; i--) {
+    var u = String(urls[i] || '');
+    var match = u.match(/[?&]og_info=([^&#]+)/i);
+    if (!match || !match[1]) continue;
+    try {
+      var decoded = decodeURIComponent(match[1]);
+      var obj = JSON.parse(decoded);
+      if (obj && typeof obj === 'object') {
+        if (!res.titulo && obj.title) {
+          res.titulo = limparTexto_(String(obj.title).replace(/\+/g, ' '));
+        }
+        if (!res.imagemUrl && obj.image) {
+          res.imagemUrl = String(obj.image).trim();
+        }
+      }
+    } catch (e) {
+      // Ignora parâmetro og_info malformado
+    }
+  }
+  return res;
+}
+
+function extrairPrecoJsonEmbutido_(html, chaves) {
+  if (!html) return null;
+  for (var i = 0; i < chaves.length; i++) {
+    var regex = new RegExp('"' + chaves[i] + '"\\s*:\\s*"?([\\d.,]+)"?', 'i');
+    var m = html.match(regex);
+    if (m && m[1]) {
+      var num = normalizarNumeroPreco_(m[1]);
+      if (num !== null && num > 0) return num;
+    }
+  }
+  return null;
+}
+
+function extrairPrecoDeTextoBrl_(texto) {
+  if (!texto) return null;
+  var m = String(texto).match(/R\$\s*(\d{1,3}(?:\.\d{3})*,\d{2}|\d+[.,]\d{2}|\d+)/i);
+  if (!m || !m[1]) return null;
+  return normalizarNumeroPreco_(m[1]);
+}
+
+function extrairTituloDoSlugUrl_(url, plataforma) {
+  try {
+    var semQuery = url.replace(/[?#].*$/, '');
+    if (plataforma === 'shopee') {
+      var mShopee = semQuery.match(/shopee\.com(?:\.br)?\/([^\/]+)-i\.\d+\.\d+/i);
+      if (mShopee && mShopee[1]) {
+        return limparTexto_(decodeURIComponent(mShopee[1]).replace(/[-+]+/g, ' '));
+      }
+    }
+    var partes = semQuery.split('/').filter(Boolean);
+    var ultimo = partes.length > 0 ? partes[partes.length - 1] : '';
+    if (ultimo && ultimo.length > 8 && !/^MLB\d+$/i.test(ultimo)) {
+      return limparTexto_(decodeURIComponent(ultimo).replace(/[-_+]+/g, ' '));
+    }
+  } catch (e) {
+    // Ignora URL malformada
+  }
+  return '';
+}
+
+function limparTituloMarketplace_(titulo, plataforma) {
+  if (!titulo) return '';
+  var t = String(titulo).trim();
+  t = t.replace(/\s*[-–|]\s*R\$\s*\d{1,3}(?:\.\d{3})*(?:,\d{2})?\s*$/i, '');
+  if (plataforma === 'shopee') {
+    t = t.replace(/\s*\|\s*Shopee(?:\s+Brasil)?\s*$/i, '');
+  } else if (plataforma === 'mercado_livre') {
+    t = t.replace(/\s*\|\s*Mercado\s*Livre(?:\s+Brasil)?\s*$/i, '');
+  } else if (plataforma === 'amazon') {
+    t = t.replace(/\s*:\s*Amazon\.com(?:\.br)?\s*$/i, '').replace(/\s*\|\s*Amazon(?:\.com\.br)?\s*$/i, '');
+  } else if (plataforma === 'magalu') {
+    t = t.replace(/\s*[-|]\s*Magazine\s*Luiza\s*$/i, '').replace(/\s*\|\s*Magalu\s*$/i, '');
+  } else if (plataforma === 'kabum') {
+    t = t.replace(/\s*\|\s*KaBuM!\s*$/i, '');
+  }
+  return t.trim();
+}
+
+function limparDescricaoShopee_(descricao) {
+  if (!descricao) return '';
+  var d = String(descricao).trim();
+  d = d.replace(/^Compre\s+[\s\S]{3,220}?\s+na\s+Shopee\s+Brasil!\s*/i, '');
+  return d.trim();
+}
+
+function unescapeJsonBasico_(str) {
+  return String(str)
+    .replace(/\\u002F/gi, '/')
+    .replace(/\\"/g, '"')
+    .replace(/\\n/g, ' ')
+    .replace(/\\\\/g, '\\');
 }
 
 function extrairJsonLdProduto_(html) {
@@ -313,10 +693,7 @@ function buscarTipoProductEmObjeto_(obj) {
   }
   if (typeof obj === 'object') {
     var tipo = obj['@type'];
-    if (
-      tipo === 'Product' ||
-      (Array.isArray(tipo) && tipo.indexOf('Product') !== -1)
-    ) {
+    if (tipo === 'Product' || (Array.isArray(tipo) && tipo.indexOf('Product') !== -1)) {
       return obj;
     }
     if (Array.isArray(obj['@graph'])) {
@@ -346,9 +723,11 @@ function extrairOfertaJsonLd_(offers) {
     if (!o || typeof o !== 'object') continue;
     var bruto = o.price !== undefined ? o.price : o.lowPrice;
     var num = normalizarNumeroPreco_(bruto);
+    var highNum = o.highPrice !== undefined ? normalizarNumeroPreco_(o.highPrice) : null;
     if (num !== null && num > 0) {
       return {
         preco: num,
+        precoOriginal: highNum && highNum > num ? highNum : null,
         moeda: o.priceCurrency ? String(o.priceCurrency).toUpperCase().slice(0, 10) : 'BRL',
       };
     }
@@ -362,28 +741,16 @@ function extrairOfertaJsonLd_(offers) {
 
 function extrairMetaTag_(html, attrName, attrValue) {
   var escaped = attrValue.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  var regex1 = new RegExp(
-    '<meta[^>]*' +
-      attrName +
-      '=["\']' +
-      escaped +
-      '["\'][^>]*content=["\']([^"\']*)["\'][^>]*>',
-    'i'
-  );
-  var m1 = html.match(regex1);
-  if (m1 && m1[1]) return limparTexto_(m1[1]);
-
-  var regex2 = new RegExp(
-    '<meta[^>]*content=["\']([^"\']*)["\'][^>]*' +
-      attrName +
-      '=["\']' +
-      escaped +
-      '["\'][^>]*>',
-    'i'
-  );
-  var m2 = html.match(regex2);
-  if (m2 && m2[1]) return limparTexto_(m2[1]);
-
+  var padroes = [
+    '<meta[^>]*\\b' + attrName + '=["\']' + escaped + '["\'][^>]*\\bcontent="([^"]*)"[^>]*>',
+    '<meta[^>]*\\b' + attrName + '=["\']' + escaped + '["\'][^>]*\\bcontent=\'([^\']*)\'[^>]*>',
+    '<meta[^>]*\\bcontent="([^"]*)"[^>]*\\b' + attrName + '=["\']' + escaped + '["\'][^>]*>',
+    '<meta[^>]*\\bcontent=\'([^\']*)\'[^>]*\\b' + attrName + '=["\']' + escaped + '["\'][^>]*>',
+  ];
+  for (var i = 0; i < padroes.length; i++) {
+    var m = html.match(new RegExp(padroes[i], 'i'));
+    if (m && m[1]) return limparTexto_(m[1]);
+  }
   return '';
 }
 
@@ -422,7 +789,6 @@ function normalizarNumeroPreco_(valor) {
   var str = String(valor).trim().replace(/[^\d.,]/g, '');
   if (!str) return null;
 
-  // Se houver vírgula como separador decimal (ex: 1.299,90 ou 99,90)
   if (str.indexOf(',') !== -1 && str.indexOf('.') !== -1) {
     if (str.lastIndexOf(',') > str.lastIndexOf('.')) {
       str = str.replace(/\./g, '').replace(',', '.');

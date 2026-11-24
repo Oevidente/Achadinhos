@@ -56,6 +56,10 @@ function mapearDocumentoProduto(snap: QueryDocumentSnapshot<DocumentData>): Prod
       typeof data.validoAte === 'string' && data.validoAte.trim()
         ? data.validoAte.trim()
         : null,
+    cupom:
+      typeof data.cupom === 'string' && data.cupom.trim()
+        ? data.cupom.trim()
+        : null,
     criadoEm: data.criadoEm ?? null,
     atualizadoEm: data.atualizadoEm ?? null,
   };

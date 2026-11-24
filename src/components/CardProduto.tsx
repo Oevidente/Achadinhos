@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ArrowRight, Package, Share2, Star } from 'lucide-react';
+import { ArrowRight, Check, Copy, Package, Share2, Star, Ticket } from 'lucide-react';
 import { registrarCliqueProduto } from '../services/produtosService';
 import type { Plataforma, Produto } from '../types/produto';
 import {
@@ -25,6 +25,7 @@ export interface CardProdutoProps {
     | 'destaque'
   > & {
     id?: string;
+    cupom?: string | null;
     atualizadoEm?: Produto['atualizadoEm'];
   };
   modoPreview?: boolean;
@@ -44,6 +45,7 @@ export function CardProduto({
   onAbrirDetalhes,
 }: CardProdutoProps) {
   const [imgErro, setImgErro] = useState(false);
+  const [cupomCopiado, setCupomCopiado] = useState(false);
 
   useEffect(() => {
     setImgErro(false);
@@ -68,6 +70,19 @@ export function CardProduto({
   const handleVerOfertaClick = () => {
     if (!modoPreview && produto.id) {
       void registrarCliqueProduto(produto.id);
+    }
+  };
+
+  const cupomLimpo = produto.cupom?.trim() ?? '';
+
+  const handleCopiarCupom = async () => {
+    if (!cupomLimpo || modoPreview) return;
+    try {
+      await navigator.clipboard.writeText(cupomLimpo);
+      setCupomCopiado(true);
+      window.setTimeout(() => setCupomCopiado(false), 2000);
+    } catch {
+      // Silencioso se clipboard indisponível
     }
   };
 
@@ -111,22 +126,24 @@ export function CardProduto({
             imagemConteudo
           )}
 
-          <span
-            className="absolute top-2 left-2 px-2 py-0.5 rounded-md text-[10px] sm:text-[11px] font-bold tracking-tight shadow-xs pointer-events-none"
-            style={{
-              backgroundColor: plat.corSelo,
-              color: corTextoPlataforma(produto.plataforma),
-            }}
-          >
-            {plat.nome}
-          </span>
-
-          {produto.destaque && (
-            <span className="absolute top-2 right-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-900/90 text-[#22C55E] text-[10px] sm:text-[11px] font-bold pointer-events-none">
-              <Star className="w-3 h-3 fill-current shrink-0" />
-              <span>Destaque</span>
+          <div className="absolute top-1.5 inset-x-1.5 flex flex-wrap items-center justify-between gap-1 pointer-events-none">
+            <span
+              className="px-1.5 sm:px-2 py-0.5 rounded-md text-[10px] sm:text-[11px] font-bold tracking-tight shadow-xs max-w-full truncate"
+              style={{
+                backgroundColor: plat.corSelo,
+                color: corTextoPlataforma(produto.plataforma),
+              }}
+            >
+              {plat.nome}
             </span>
-          )}
+
+            {produto.destaque && (
+              <span className="inline-flex items-center gap-0.5 sm:gap-1 px-1.5 sm:px-2 py-0.5 rounded-md bg-slate-900/90 text-[#22C55E] text-[10px] sm:text-[11px] font-bold shrink-0">
+                <Star className="w-2.5 h-2.5 sm:w-3 sm:h-3 fill-current shrink-0" />
+                <span>Destaque</span>
+              </span>
+            )}
+          </div>
         </div>
 
         <div className="space-y-1.5">
@@ -171,6 +188,36 @@ export function CardProduto({
               </p>
             )}
           </div>
+
+          {cupomLimpo && (
+            <div className="flex items-center justify-between gap-1.5 sm:gap-2 rounded-lg border border-dashed border-[#15803D]/45 bg-[#ECFDF5] px-2 sm:px-2.5 py-1 sm:py-1.5">
+              <div className="flex items-center gap-1 sm:gap-1.5 min-w-0">
+                <Ticket className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-[#15803D] shrink-0" />
+                <span className="font-mono text-[10.5px] sm:text-xs font-bold text-[#052E16] truncate">
+                  {cupomLimpo}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => void handleCopiarCupom()}
+                disabled={modoPreview}
+                aria-label={`Copiar cupom ${cupomLimpo}`}
+                className="inline-flex items-center gap-1 rounded px-1.5 sm:px-2 py-0.5 text-[10px] sm:text-[11px] font-bold bg-[#15803D] hover:bg-[#166534] text-white transition-colors shrink-0 cursor-pointer disabled:opacity-80 disabled:cursor-default"
+              >
+                {cupomCopiado ? (
+                  <>
+                    <Check className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
+                    <span>Copiado</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
+                    <span>Copiar</span>
+                  </>
+                )}
+              </button>
+            </div>
+          )}
         </div>
       </div>
 

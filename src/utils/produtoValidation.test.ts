@@ -27,18 +27,22 @@ test('sanitizarCriacaoProduto preenche padrões e detecta plataforma pelo linkOr
   assert.equal(sanitizado.destaque, false);
   assert.equal(sanitizado.cliques, 0);
   assert.equal(sanitizado.validoAte, null);
+  assert.equal(sanitizado.cupom, null);
 });
 
 test('sanitizarCriacaoProduto aplica limites de tamanho e rejeita dados inválidos', () => {
   const tituloGigante = 'a'.repeat(300);
+  const cupomGigante = '  ' + 'X'.repeat(80) + '  ';
   const sanitizado = sanitizarCriacaoProduto({
     titulo: tituloGigante,
     precoAtual: 10,
     linkOriginal: 'https://amzn.to/abc',
     validoAte: '2026-12-31',
+    cupom: cupomGigante,
   });
   assert.equal(sanitizado.titulo.length, PRODUTO_LIMITES.TITULO_MAX);
   assert.equal(sanitizado.validoAte, '2026-12-31');
+  assert.equal(sanitizado.cupom?.length, PRODUTO_LIMITES.CUPOM_MAX);
 
   assert.throws(() =>
     sanitizarCriacaoProduto({
@@ -66,19 +70,24 @@ test('sanitizarCriacaoProduto aplica limites de tamanho e rejeita dados inválid
   );
 });
 
-test('sanitizarAtualizacaoProduto valida campos parciais', () => {
+test('sanitizarAtualizacaoProduto valida campos parciais incluindo cupom', () => {
   const patch = sanitizarAtualizacaoProduto({
     precoAtual: 99.5,
     destaque: true,
     linkAfiliado: '',
     validoAte: '',
+    cupom: '  ACHADINHO15 ',
   });
   assert.deepEqual(patch, {
     precoAtual: 99.5,
     destaque: true,
     linkAfiliado: null,
     validoAte: null,
+    cupom: 'ACHADINHO15',
   });
+
+  const limpaCupom = sanitizarAtualizacaoProduto({ cupom: '   ' });
+  assert.deepEqual(limpaCupom, { cupom: null });
 
   assert.throws(() => sanitizarAtualizacaoProduto({ titulo: '' }));
   assert.throws(() => sanitizarAtualizacaoProduto({ validoAte: '2026-02-31' }));

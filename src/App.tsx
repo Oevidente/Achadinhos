@@ -3,6 +3,7 @@ import { onAuthStateChanged, type User } from 'firebase/auth';
 import { Loader2 } from 'lucide-react';
 import { AdminLayout } from './components/AdminLayout';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { OfflineIndicator } from './components/OfflineIndicator';
 import { ToastContainer, type ToastItem } from './components/ToastContainer';
 import { ADMIN_EMAILS } from './config';
 import { AdminLoginPage } from './pages/AdminLoginPage';
@@ -204,6 +205,7 @@ export default function App() {
   return (
     <ErrorBoundary>
       {renderContent()}
+      <OfflineIndicator />
       <ToastContainer toasts={toasts} onDismiss={removerToast} />
     </ErrorBoundary>
   );

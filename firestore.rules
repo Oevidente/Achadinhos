@@ -98,6 +98,7 @@ service cloud.firestore {
         'destaque',
         'cliques',
         'validoAte',
+        'cupom',
         'criadoEm',
         'atualizadoEm'
       ]) &&
@@ -115,6 +116,7 @@ service cloud.firestore {
       data.destaque is bool &&
       data.cliques is number && data.cliques >= 0 &&
       (!('validoAte' in data) || data.validoAte == null || (data.validoAte is string && data.validoAte.size() <= 32 && data.validoAte.matches('^\\d{4}-\\d{2}-\\d{2}$'))) &&
+      (!('cupom' in data) || data.cupom == null || (data.cupom is string && data.cupom.size() <= 64)) &&
       data.criadoEm is timestamp &&
       data.atualizadoEm is timestamp;
     }
@@ -158,6 +160,7 @@ service cloud.firestore {
             'destaque',
             'cliques',
             'validoAte',
+            'cupom',
             'atualizadoEm'
           ])
         )

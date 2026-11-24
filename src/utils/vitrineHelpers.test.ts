@@ -136,3 +136,21 @@ test('obterUrlDestinoOferta prioriza linkAfiliado sobre linkOriginal', () => {
     'https://amazon.com.br/dp/123'
   );
 });
+
+test('filtrarEOrdenarVitrine encontra produtos pelo código do cupom', () => {
+  const lista = [
+    baseProduto({ id: '1', titulo: 'Teclado Mecânico', cupom: 'DECO20' }),
+    baseProduto({ id: '2', titulo: 'Mouse Pad', cupom: null }),
+  ];
+
+  const encontrados = filtrarEOrdenarVitrine(lista, {
+    busca: 'deco20',
+    plataforma: 'todas',
+    ordenacao: 'mais_recentes',
+  });
+
+  assert.deepEqual(
+    encontrados.map((p) => p.id),
+    ['1']
+  );
+});

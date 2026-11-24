@@ -7,6 +7,7 @@ import {
   Copy,
   Package,
   Star,
+  Ticket,
 } from 'lucide-react';
 import { BrandLogo } from '../components/BrandLogo';
 import { buscarProduto, registrarCliqueProduto } from '../services/produtosService';
@@ -55,6 +56,7 @@ export function ProdutoDetalhePage({
   const [erroRede, setErroRede] = useState<string | null>(null);
   const [imgErro, setImgErro] = useState(false);
   const [copiado, setCopiado] = useState(false);
+  const [cupomCopiado, setCupomCopiado] = useState(false);
 
   const carregarProduto = useCallback(async () => {
     setCarregando(true);
@@ -147,6 +149,17 @@ export function ProdutoDetalhePage({
       window.setTimeout(() => setCopiado(false), 2500);
     } catch {
       onToast('erro', 'Não foi possível copiar o link automaticamente.');
+    }
+  };
+
+  const handleCopiarCupom = async (codigo: string) => {
+    try {
+      await navigator.clipboard.writeText(codigo);
+      setCupomCopiado(true);
+      onToast('sucesso', `Cupom ${codigo} copiado! Cole no carrinho da loja.`);
+      window.setTimeout(() => setCupomCopiado(false), 2500);
+    } catch {
+      onToast('erro', 'Não foi possível copiar o cupom automaticamente.');
     }
   };
 
@@ -328,6 +341,39 @@ export function ProdutoDetalhePage({
                   <p className="text-xs text-slate-400">{tempoConferido}</p>
                 )}
               </div>
+
+              {produto.cupom && produto.cupom.trim() && (
+                <div className="rounded-xl border border-dashed border-[#22C55E]/50 bg-[#0A170D] p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-10 h-10 rounded-lg bg-[#122616] border border-[#22C55E]/30 text-[#4ADE80] flex items-center justify-center shrink-0">
+                      <Ticket className="w-5 h-5" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-xs font-medium text-slate-400">Cupom de desconto</p>
+                      <p className="font-mono text-base font-bold text-white truncate">
+                        {produto.cupom.trim()}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void handleCopiarCupom(produto.cupom!.trim())}
+                    className="inline-flex items-center justify-center gap-2 min-h-[40px] px-4 py-2 rounded-lg bg-[#22C55E] hover:bg-[#16A34A] text-[#052E16] font-bold text-xs sm:text-sm transition-colors cursor-pointer whitespace-nowrap shrink-0"
+                  >
+                    {cupomCopiado ? (
+                      <>
+                        <Check className="w-4 h-4" />
+                        <span>Cupom copiado</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-4 h-4" />
+                        <span>Copiar cupom</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              )}
 
               {produto.descricao.trim() && (
                 <div className="space-y-1.5">

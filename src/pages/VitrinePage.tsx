@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { BrandLogo } from '../components/BrandLogo';
 import { CardProduto } from '../components/CardProduto';
+import { PWAInstallButton } from '../components/PWAInstallButton';
 import { listarProdutosAtivosPaginado } from '../services/produtosService';
 import type { Plataforma, Produto } from '../types/produto';
 import { PLATAFORMAS_CONFIG } from '../utils/plataformas';
@@ -154,16 +155,19 @@ export function VitrinePage({ onNavigate }: VitrinePageProps) {
               <BrandLogo tamanho="md" />
             </a>
 
-            <a
-              href={comBasePath('/admin', import.meta.env.BASE_URL)}
-              onClick={(e) => {
-                e.preventDefault();
-                onNavigate('/admin');
-              }}
-              className="lg:hidden text-xs font-medium text-slate-400 hover:text-white transition-colors whitespace-nowrap"
-            >
-              Painel ADM
-            </a>
+            <div className="flex items-center gap-2.5 lg:hidden">
+              <PWAInstallButton />
+              <a
+                href={comBasePath('/admin', import.meta.env.BASE_URL)}
+                onClick={(e) => {
+                  e.preventDefault();
+                  onNavigate('/admin');
+                }}
+                className="text-xs font-medium text-slate-400 hover:text-white transition-colors whitespace-nowrap"
+              >
+                Painel ADM
+              </a>
+            </div>
           </div>
 
           <div className="relative w-full lg:max-w-xl flex items-center">
@@ -198,7 +202,7 @@ export function VitrinePage({ onNavigate }: VitrinePageProps) {
             </button>
           </div>
 
-          <div className="hidden lg:flex items-center gap-5 text-xs text-slate-300 shrink-0">
+          <div className="hidden lg:flex items-center gap-4 text-xs text-slate-300 shrink-0">
             <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
               <Zap className="w-4 h-4 text-[#22C55E]" />
               <span>Acesso rápido às lojas</span>
@@ -207,10 +211,7 @@ export function VitrinePage({ onNavigate }: VitrinePageProps) {
               <ShieldCheck className="w-4 h-4 text-[#22C55E]" />
               <span>Links verificados</span>
             </span>
-            <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
-              <Sparkles className="w-4 h-4 text-[#22C55E]" />
-              <span>As melhores ofertas</span>
-            </span>
+            <PWAInstallButton />
           </div>
         </div>
 
@@ -220,7 +221,7 @@ export function VitrinePage({ onNavigate }: VitrinePageProps) {
             <div
               role="group"
               aria-label="Filtrar por plataforma"
-              className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar py-0.5"
+              className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar py-0.5 pr-4 sm:pr-0 [mask-image:linear-gradient(to_right,black_92%,transparent)] sm:[mask-image:none]"
             >
               <button
                 type="button"

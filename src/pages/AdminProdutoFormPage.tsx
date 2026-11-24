@@ -42,6 +42,7 @@ const ESTADO_INICIAL: ProdutoFormState = {
   status: 'ativo',
   destaque: false,
   validoAte: '',
+  cupom: '',
 };
 
 export function AdminProdutoFormPage({
@@ -62,6 +63,7 @@ export function AdminProdutoFormPage({
     () => new Set()
   );
   const [confiancaPreco, setConfiancaPreco] = useState<ConfiancaPreco | null>(null);
+  const [avisosExtrator, setAvisosExtrator] = useState<string[]>([]);
 
   useEffect(() => {
     if (!produtoId) {
@@ -72,6 +74,7 @@ export function AdminProdutoFormPage({
       setOrigemDados('manual');
       setCamposExtraidos(new Set());
       setConfiancaPreco(null);
+      setAvisosExtrator([]);
       return;
     }
 
@@ -98,10 +101,12 @@ export function AdminProdutoFormPage({
           status: produto.status,
           destaque: produto.destaque,
           validoAte: produto.validoAte ?? '',
+          cupom: produto.cupom ?? '',
         });
         setOrigemDados(produto.origemDados);
         setCamposExtraidos(new Set());
         setConfiancaPreco(null);
+        setAvisosExtrator([]);
       } catch {
         if (!ativo) return;
         setErroCarga('Não foi possível carregar os dados do produto.');
@@ -185,6 +190,7 @@ export function AdminProdutoFormPage({
 
       setCamposExtraidos(preenchidos);
       setConfiancaPreco(extraido.confiancaPreco);
+      setAvisosExtrator(extraido.avisos);
       setOrigemDados('automatico');
       setErros({});
 
@@ -243,6 +249,7 @@ export function AdminProdutoFormPage({
           status: form.status,
           destaque: form.destaque,
           validoAte: validacao.validoAteValor,
+          cupom: validacao.cupomValor,
           origemDados,
         });
         onToast('sucesso', 'Produto atualizado com sucesso.');
@@ -259,6 +266,7 @@ export function AdminProdutoFormPage({
           status: form.status,
           destaque: form.destaque,
           validoAte: validacao.validoAteValor,
+          cupom: validacao.cupomValor,
           origemDados,
         });
         onToast('sucesso', 'Produto cadastrado com sucesso.');
@@ -393,6 +401,17 @@ export function AdminProdutoFormPage({
                 ))}
               </select>
             </div>
+
+            {avisosExtrator.length > 0 && (
+              <div className="rounded-lg border border-amber-400/35 bg-amber-500/10 px-3 py-2.5 space-y-1 text-xs text-amber-200">
+                {avisosExtrator.map((aviso, idx) => (
+                  <p key={idx} className="flex items-start gap-2">
+                    <AlertTriangle className="w-3.5 h-3.5 text-amber-300 shrink-0 mt-0.5" />
+                    <span>{aviso}</span>
+                  </p>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="space-y-4">
@@ -522,28 +541,59 @@ export function AdminProdutoFormPage({
               </div>
             </div>
 
-            <div>
-              <label
-                htmlFor="campo-link-afiliado"
-                className="block text-xs font-medium text-slate-300 mb-1.5"
-              >
-                Link de afiliado (opcional)
-              </label>
-              <input
-                id="campo-link-afiliado"
-                type="url"
-                value={form.linkAfiliado}
-                onChange={(e) => atualizarCampo('linkAfiliado', e.target.value)}
-                placeholder="https://..."
-                className={`w-full rounded-lg border bg-[#070A07] px-3 py-2.5 text-sm text-white placeholder:text-slate-500 focus:outline-none ${
-                  erros.linkAfiliado
-                    ? 'border-red-500 focus:border-red-400'
-                    : 'border-[#1E2A20] focus:border-[#22C55E]'
-                }`}
-              />
-              {erros.linkAfiliado && (
-                <p className="mt-1 text-xs text-red-400">{erros.linkAfiliado}</p>
-              )}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label
+                  htmlFor="campo-link-afiliado"
+                  className="block text-xs font-medium text-slate-300 mb-1.5"
+                >
+                  Link de afiliado (opcional)
+                </label>
+                <input
+                  id="campo-link-afiliado"
+                  type="url"
+                  value={form.linkAfiliado}
+                  onChange={(e) => atualizarCampo('linkAfiliado', e.target.value)}
+                  placeholder="https://..."
+                  className={`w-full rounded-lg border bg-[#070A07] px-3 py-2.5 text-sm text-white placeholder:text-slate-500 focus:outline-none ${
+                    erros.linkAfiliado
+                      ? 'border-red-500 focus:border-red-400'
+                      : 'border-[#1E2A20] focus:border-[#22C55E]'
+                  }`}
+                />
+                {erros.linkAfiliado && (
+                  <p className="mt-1 text-xs text-red-400">{erros.linkAfiliado}</p>
+                )}
+              </div>
+
+              <div>
+                <label
+                  htmlFor="campo-cupom"
+                  className="block text-xs font-medium text-slate-300 mb-1.5"
+                >
+                  Cupom de desconto (opcional)
+                </label>
+                <input
+                  id="campo-cupom"
+                  type="text"
+                  maxLength={64}
+                  value={form.cupom}
+                  onChange={(e) => atualizarCampo('cupom', e.target.value)}
+                  placeholder="Ex.: ACHADINHO10"
+                  className={`w-full rounded-lg border bg-[#070A07] px-3 py-2.5 text-sm font-mono text-white placeholder:font-sans placeholder:text-slate-500 focus:outline-none ${
+                    erros.cupom
+                      ? 'border-red-500 focus:border-red-400'
+                      : 'border-[#1E2A20] focus:border-[#22C55E]'
+                  }`}
+                />
+                {erros.cupom ? (
+                  <p className="mt-1 text-xs text-red-400">{erros.cupom}</p>
+                ) : (
+                  <p className="mt-1 text-[11px] text-slate-400">
+                    Se preenchido, aparece no card com botão para copiar.
+                  </p>
+                )}
+              </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-start pt-1">
@@ -675,6 +725,7 @@ export function AdminProdutoFormPage({
                   linkOriginal: form.linkOriginal,
                   linkAfiliado: form.linkAfiliado.trim() || null,
                   destaque: form.destaque,
+                  cupom: form.cupom.trim() || null,
                 }}
               />
             </div>

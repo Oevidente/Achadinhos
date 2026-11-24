@@ -58,7 +58,8 @@ export function filtrarEOrdenarVitrine(
     if (termo) {
       const noTitulo = produto.titulo.toLowerCase().includes(termo);
       const naDesc = produto.descricao.toLowerCase().includes(termo);
-      if (!noTitulo && !naDesc) return false;
+      const noCupom = (produto.cupom ?? '').toLowerCase().includes(termo);
+      if (!noTitulo && !naDesc && !noCupom) return false;
     }
     return true;
   });
