@@ -1,4 +1,9 @@
 import firebaseAppletConfig from '../firebase-applet-config.json';
+import {
+  lerConfigExtratorLocal,
+  resolverConfigExtrator,
+  type ExtratorConfigResolvida,
+} from './utils/extratorConfig';
 
 export interface FirebaseAppConfig {
   apiKey: string;
@@ -41,6 +46,10 @@ export const extratorConfig = {
   url: typeof env.VITE_EXTRATOR_URL === 'string' ? env.VITE_EXTRATOR_URL.trim() : '',
   token: typeof env.VITE_EXTRATOR_TOKEN === 'string' ? env.VITE_EXTRATOR_TOKEN.trim() : '',
 };
+
+export function obterExtratorConfigAtiva(): ExtratorConfigResolvida {
+  return resolverConfigExtrator(extratorConfig, lerConfigExtratorLocal());
+}
 
 export const APP_CONFIG = {
   nome: 'Achadinhos do Deco',

@@ -8,11 +8,10 @@
  * - Amazon, Magalu, AliExpress, Americanas, KaBuM!: JSON-LD + meta tags + fallback de moeda em texto + fallback de User-Agent.
  */
 
-var TOKEN_PLACEHOLDER_ = 'TROQUE_POR_UM_TOKEN_FORTE_AQUI';
-var EXTRATOR_VERSAO_ = '2026-11-25';
-// Dica: para não perder seu token ao atualizar este arquivo no GitHub/Apps Script,
-// você pode salvá-lo em "Configurações do projeto > Propriedades do script" com a chave TOKEN_SECRETO.
-var TOKEN_SECRETO = TOKEN_PLACEHOLDER_;
+var EXTRATOR_VERSAO_ = '2026-11-26';
+// Cole seu token abaixo entre as aspas simples (ex.: var TOKEN_SECRETO = 'meu-token-123';)
+// ou salve a chave TOKEN_SECRETO em "Configurações do projeto > Propriedades do script".
+var TOKEN_SECRETO = '';
 var CACHE_EXPIRACAO_SEGUNDOS = 6 * 60 * 60; // 6 horas
 
 var UA_CHROME =
@@ -52,22 +51,57 @@ var PLATAFORMAS_DOMINIOS = {
   kabum: ['kabum.com.br', 'tidd.ly'],
 };
 
+function isTokenPlaceholder_(valor) {
+  var v = String(valor || '').trim();
+  return !v || v === 'TROQUE_POR_UM_TOKEN_FORTE_AQUI' || v === 'SEU_TOKEN_AQUI';
+}
+
 function obterConfigToken_() {
   var tokenCodigo = String(TOKEN_SECRETO || '').trim();
-  if (tokenCodigo && tokenCodigo !== TOKEN_PLACEHOLDER_) {
-    return { valor: tokenCodigo, fonte: 'código (TOKEN_SECRETO)' };
+  if (!isTokenPlaceholder_(tokenCodigo)) {
+    return { valor: tokenCodigo, fonte: 'código (TOKEN_SECRETO)', chaves: [], erroProp: '' };
   }
 
+  var chaves = [];
+  var erroProp = '';
   if (typeof PropertiesService !== 'undefined') {
     try {
-      var tokenProp = PropertiesService.getScriptProperties().getProperty('TOKEN_SECRETO');
-      if (tokenProp && String(tokenProp).trim()) {
-        return { valor: String(tokenProp).trim(), fonte: 'Propriedades do script' };
+      var props = PropertiesService.getScriptProperties();
+      var todas = typeof props.getProperties === 'function' ? props.getProperties() : null;
+      if (todas && typeof todas === 'object') {
+        for (var k in todas) {
+          if (!Object.prototype.hasOwnProperty.call(todas, k)) continue;
+          chaves.push(k);
+          var chaveNorm = String(k || '').trim().toUpperCase();
+          if (chaveNorm === 'TOKEN_SECRETO' || chaveNorm === 'VITE_EXTRATOR_TOKEN') {
+            var valNorm = String(todas[k] || '').trim();
+            if (!isTokenPlaceholder_(valNorm)) {
+              return {
+                valor: valNorm,
+                fonte: 'Propriedades do script (' + k + ')',
+                chaves: chaves,
+                erroProp: '',
+              };
+            }
+          }
+        }
+      } else {
+        var tokenProp = props.getProperty('TOKEN_SECRETO') || props.getProperty('VITE_EXTRATOR_TOKEN');
+        if (!isTokenPlaceholder_(tokenProp)) {
+          return {
+            valor: String(tokenProp).trim(),
+            fonte: 'Propriedades do script',
+            chaves: ['TOKEN_SECRETO'],
+            erroProp: '',
+          };
+        }
       }
-    } catch (e) {}
+    } catch (e) {
+      erroProp = String((e && e.message) || e || '');
+    }
   }
 
-  return { valor: tokenCodigo, fonte: 'não configurado' };
+  return { valor: '', fonte: 'não configurado', chaves: chaves, erroProp: erroProp };
 }
 
 function temAspasNasPontas_(valor) {
@@ -77,28 +111,45 @@ function temAspasNasPontas_(valor) {
 function doGet(e) {
   try {
     var params = (e && e.parameter) || {};
+    var action = String(params.action || '').trim().toLowerCase();
     var token = String(params.token || '').trim();
     var url = String(params.url || '').trim();
     var configToken = obterConfigToken_();
     var tokenEsperado = configToken.valor;
+    var tokenConfigurado = !isTokenPlaceholder_(tokenEsperado);
 
-    if (!tokenEsperado || tokenEsperado === TOKEN_PLACEHOLDER_) {
+    if (!tokenConfigurado) {
+      var infoProps = configToken.erroProp
+        ? ' (erro PropertiesService: ' + configToken.erroProp + ')'
+        : ' (Propriedades do script salvas: ' +
+          (configToken.chaves.length > 0 ? configToken.chaves.join(', ') : 'nenhuma') +
+          ')';
       return responderJson({
         ok: false,
+        versao: EXTRATOR_VERSAO_,
+        tokenConfigurado: false,
+        origemToken: configToken.fonte,
+        tokenValido: false,
         erro:
           'Token não configurado no Google Apps Script (v' +
           EXTRATOR_VERSAO_ +
-          '). Defina TOKEN_SECRETO nas Propriedades do script ou no código e publique uma Nova versão.',
+          ')' +
+          infoProps +
+          '. Defina var TOKEN_SECRETO = \'SEU_TOKEN\'; na linha 14 do Code.gs (ou salve TOKEN_SECRETO nas Propriedades do script), salve e publique uma Nova versão.',
       });
     }
 
     if (!token) {
       return responderJson({
         ok: false,
+        versao: EXTRATOR_VERSAO_,
+        tokenConfigurado: true,
+        origemToken: configToken.fonte,
+        tokenValido: false,
         erro:
           'Token ausente na requisição enviada pelo site (Apps Script v' +
           EXTRATOR_VERSAO_ +
-          '). Verifique VITE_EXTRATOR_TOKEN no GitHub Secrets.',
+          '). Informe o token no painel ou em VITE_EXTRATOR_TOKEN no GitHub Secrets.',
       });
     }
 
@@ -109,6 +160,10 @@ function doGet(e) {
           : '';
       return responderJson({
         ok: false,
+        versao: EXTRATOR_VERSAO_,
+        tokenConfigurado: true,
+        origemToken: configToken.fonte,
+        tokenValido: false,
         erro:
           'Token de autenticação inválido (Apps Script v' +
           EXTRATOR_VERSAO_ +
@@ -120,7 +175,17 @@ function doGet(e) {
           tokenEsperado.length +
           ').' +
           dicaAspas +
-          ' Confira se VITE_EXTRATOR_TOKEN no GitHub Secrets é idêntico e rode o workflow do GitHub Pages.',
+          ' Confira se o token do painel/GitHub Secrets é idêntico ao TOKEN_SECRETO do Apps Script.',
+      });
+    }
+
+    if (action === 'diagnostico') {
+      return responderJson({
+        ok: true,
+        versao: EXTRATOR_VERSAO_,
+        tokenConfigurado: true,
+        origemToken: configToken.fonte,
+        tokenValido: true,
       });
     }
 

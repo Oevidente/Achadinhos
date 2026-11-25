@@ -5,11 +5,17 @@
  * - Mercado Livre (links /social/, /p/MLB, meli.la): extrai título, imagem, preço atual e preço original.
  * - Shopee (shopee.com.br, s.shopee.com.br, shp.ee): usa User-Agent WhatsApp para obter título, descrição e imagem SSR + slug da URL.
  * - TikTok Shop (vt.tiktok.com, tiktok.com/view/product): captura parâmetro `og_info` nos redirecionamentos para obter título e imagem mesmo com Security Check.
- * - Caso `VITE_EXTRATOR_URL` não esteja configurado, extrai dados disponíveis na própria URL (slug / og_info) quando possível.
+ * - Caso o extrator remoto não esteja configurado, extrai dados disponíveis na própria URL (slug / og_info) quando possível.
  */
 
-import { APP_CONFIG, extratorConfig } from '../config';
+import { APP_CONFIG, obterExtratorConfigAtiva } from '../config';
 import { isHttpsUrl } from '../utils/adminHelpers';
+import {
+  analisarRespostaDiagnostico,
+  isErroConfiguracaoExtrator,
+  validarUrlAppsScript,
+  type ResultadoDiagnosticoExtrator,
+} from '../utils/extratorConfig';
 import {
   extrairMetadadosPelaUrlLocal,
   isDominioPermitidoExtrator,
@@ -20,6 +26,98 @@ import {
 import { obterPlataformasVisiveis, PLATAFORMAS_CONFIG } from '../utils/plataformas';
 
 export type { ConfiancaPreco, ExtratorResultado } from '../utils/extratorHelpers';
+export type { ResultadoDiagnosticoExtrator } from '../utils/extratorConfig';
+
+export class ExtratorConfigError extends Error {
+  readonly isConfigError = true;
+
+  constructor(message: string) {
+    super(message);
+    this.name = 'ExtratorConfigError';
+  }
+}
+
+export async function testarConexaoExtrator(
+  urlInput?: string,
+  tokenInput?: string
+): Promise<ResultadoDiagnosticoExtrator> {
+  const ativa = obterExtratorConfigAtiva();
+  const url = (urlInput ?? ativa.url).trim();
+  const token = (tokenInput ?? ativa.token).trim();
+
+  const validacaoUrl = validarUrlAppsScript(url);
+  if (!validacaoUrl.valida) {
+    return {
+      ok: false,
+      versao: null,
+      tokenConfigurado: null,
+      tokenValido: null,
+      origemToken: null,
+      versaoAntigaOuErrada: false,
+      titulo: 'URL do Apps Script inválida',
+      detalhe: validacaoUrl.erro ?? 'Informe uma URL válida terminando em /exec.',
+    };
+  }
+
+  if (!token) {
+    return {
+      ok: false,
+      versao: null,
+      tokenConfigurado: null,
+      tokenValido: false,
+      origemToken: null,
+      versaoAntigaOuErrada: false,
+      titulo: 'Token não informado',
+      detalhe: 'Informe ou gere um token para testar a conexão com o Google Apps Script.',
+    };
+  }
+
+  const endpoint = new URL(url);
+  endpoint.searchParams.set('action', 'diagnostico');
+  endpoint.searchParams.set('token', token);
+
+  const controller = new AbortController();
+  const timerId = window.setTimeout(() => {
+    controller.abort();
+  }, APP_CONFIG.extratorTimeoutMs);
+
+  try {
+    const resposta = await fetch(endpoint.toString(), {
+      method: 'GET',
+      signal: controller.signal,
+    });
+    const contentType = resposta.headers.get('content-type') ?? '';
+    const corpo = await resposta.text();
+    return analisarRespostaDiagnostico(resposta.status, contentType, corpo);
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      return {
+        ok: false,
+        versao: null,
+        tokenConfigurado: null,
+        tokenValido: null,
+        origemToken: null,
+        versaoAntigaOuErrada: false,
+        titulo: 'Tempo limite esgotado (15s)',
+        detalhe:
+          'O Google Apps Script demorou muito para responder. Tente testar novamente em alguns segundos.',
+      };
+    }
+    return {
+      ok: false,
+      versao: null,
+      tokenConfigurado: null,
+      tokenValido: null,
+      origemToken: null,
+      versaoAntigaOuErrada: false,
+      titulo: 'Não foi possível conectar ao Google Apps Script',
+      detalhe:
+        'O navegador foi bloqueado ou a URL não existe. Confirme se a URL termina em /exec e se "Quem pode acessar" está definido como "Qualquer pessoa".',
+    };
+  } finally {
+    window.clearTimeout(timerId);
+  }
+}
 
 export async function extrairDadosDoLink(url: string): Promise<ExtratorResultado> {
   const urlLimpa = url.trim();
@@ -40,19 +138,20 @@ export async function extrairDadosDoLink(url: string): Promise<ExtratorResultado
   }
 
   const fallbackLocal = extrairMetadadosPelaUrlLocal(urlLimpa);
+  const configAtiva = obterExtratorConfigAtiva();
 
-  if (!extratorConfig.url || !extratorConfig.token) {
+  if (!configAtiva.url || !configAtiva.token) {
     if (fallbackLocal) {
       return fallbackLocal;
     }
-    throw new Error(
-      'Extrator remoto ainda não configurado. Defina VITE_EXTRATOR_URL e VITE_EXTRATOR_TOKEN após implantar o Google Apps Script ou preencha os dados manualmente.'
+    throw new ExtratorConfigError(
+      'Extrator remoto ainda não configurado. Clique em "Configurar extrator" para informar a URL do Google Apps Script e o token.'
     );
   }
 
   const endpoint = montarUrlRequisicaoExtrator(
-    extratorConfig.url,
-    extratorConfig.token,
+    configAtiva.url,
+    configAtiva.token,
     urlLimpa
   );
 
@@ -67,6 +166,19 @@ export async function extrairDadosDoLink(url: string): Promise<ExtratorResultado
       signal: controller.signal,
     });
 
+    const contentType = resposta.headers.get('content-type') ?? '';
+    const rawBody = await resposta.text();
+
+    if (
+      contentType.toLowerCase().includes('text/html') ||
+      rawBody.trim().startsWith('<!DOCTYPE') ||
+      rawBody.trim().startsWith('<html')
+    ) {
+      throw new ExtratorConfigError(
+        'O Google Apps Script retornou uma página HTML em vez de JSON. Confira se a implantação está publicada para "Qualquer pessoa" e se a URL termina em /exec.'
+      );
+    }
+
     if (!resposta.ok) {
       if (fallbackLocal) return fallbackLocal;
       throw new Error(`O serviço extrator respondeu com erro HTTP ${resposta.status}.`);
@@ -74,7 +186,7 @@ export async function extrairDadosDoLink(url: string): Promise<ExtratorResultado
 
     let payload: unknown;
     try {
-      payload = await resposta.json();
+      payload = JSON.parse(rawBody) as unknown;
     } catch {
       if (fallbackLocal) return fallbackLocal;
       throw new Error('O serviço extrator retornou uma resposta inválida.');
@@ -82,6 +194,12 @@ export async function extrairDadosDoLink(url: string): Promise<ExtratorResultado
 
     return normalizarRespostaExtrator(payload, urlLimpa);
   } catch (error) {
+    if (error instanceof ExtratorConfigError) {
+      throw error;
+    }
+    if (error instanceof Error && isErroConfiguracaoExtrator(error.message)) {
+      throw new ExtratorConfigError(error.message);
+    }
     if (fallbackLocal) {
       return fallbackLocal;
     }
@@ -91,8 +209,8 @@ export async function extrairDadosDoLink(url: string): Promise<ExtratorResultado
       );
     }
     if (error instanceof TypeError) {
-      throw new Error(
-        'Não foi possível conectar ao serviço extrator. Verifique a URL configurada ou preencha manualmente.'
+      throw new ExtratorConfigError(
+        'Não foi possível conectar ao serviço extrator. Verifique a URL configurada ou abra "Configurar extrator".'
       );
     }
     throw error instanceof Error

@@ -1,7 +1,12 @@
 import { type FormEvent, useEffect, useState } from 'react';
-import { AlertTriangle, ArrowLeft, Link2, Loader2, Sparkles } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Link2, Loader2, Settings2, Sparkles } from 'lucide-react';
 import { CardProduto } from '../components/CardProduto';
-import { extrairDadosDoLink, type ConfiancaPreco } from '../services/extratorService';
+import { ExtratorConfigModal } from '../components/ExtratorConfigModal';
+import {
+  ExtratorConfigError,
+  extrairDadosDoLink,
+  type ConfiancaPreco,
+} from '../services/extratorService';
 import {
   atualizarProduto,
   buscarProduto,
@@ -72,6 +77,11 @@ export function AdminProdutoFormPage({
   );
   const [confiancaPreco, setConfiancaPreco] = useState<ConfiancaPreco | null>(null);
   const [avisosExtrator, setAvisosExtrator] = useState<string[]>([]);
+  const [erroExtrator, setErroExtrator] = useState<{
+    mensagem: string;
+    isConfigError: boolean;
+  } | null>(null);
+  const [configExtratorAberta, setConfigExtratorAberta] = useState(false);
 
   useEffect(() => {
     if (!produtoId) {
@@ -83,6 +93,7 @@ export function AdminProdutoFormPage({
       setCamposExtraidos(new Set());
       setConfiancaPreco(null);
       setAvisosExtrator([]);
+      setErroExtrator(null);
       return;
     }
 
@@ -116,6 +127,7 @@ export function AdminProdutoFormPage({
         setCamposExtraidos(new Set());
         setConfiancaPreco(null);
         setAvisosExtrator([]);
+        setErroExtrator(null);
       } catch {
         if (!ativo) return;
         setErroCarga('Não foi possível carregar os dados do produto.');
@@ -174,6 +186,7 @@ export function AdminProdutoFormPage({
 
   const handleBuscarDadosDoLink = async () => {
     setExtraindo(true);
+    setErroExtrator(null);
     try {
       const extraido = await extrairDadosDoLink(form.linkOriginal);
       const preenchidos = new Set<keyof ProdutoFormState>();
@@ -224,6 +237,8 @@ export function AdminProdutoFormPage({
         error instanceof Error
           ? error.message
           : 'Não foi possível extrair os dados do link. Preencha manualmente.';
+      const isConfigError = error instanceof ExtratorConfigError;
+      setErroExtrator({ mensagem: motivo, isConfigError });
       onToast('erro', motivo);
     } finally {
       setExtraindo(false);
@@ -356,12 +371,22 @@ export function AdminProdutoFormPage({
           {/* Destaque no topo: Link do produto + Plataforma + Botão "Em breve" */}
           <div className="rounded-xl border border-[#22C55E]/30 bg-[#09120B] p-4 space-y-4">
             <div>
-              <label
-                htmlFor="campo-link-original"
-                className="block text-sm font-semibold text-white mb-1.5"
-              >
-                Link do produto *
-              </label>
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-1.5">
+                <label
+                  htmlFor="campo-link-original"
+                  className="block text-sm font-semibold text-white"
+                >
+                  Link do produto *
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setConfigExtratorAberta(true)}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-[#1E2A20] bg-[#070A07] hover:bg-[#141E16] text-[11px] font-medium text-slate-300 hover:text-white transition-colors cursor-pointer"
+                >
+                  <Settings2 className="w-3.5 h-3.5 text-[#22C55E]" />
+                  <span>Configurar extrator</span>
+                </button>
+              </div>
               <div className="flex flex-col sm:flex-row gap-2.5">
                 <div className="relative flex-1">
                   <Link2 className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -457,6 +482,30 @@ export function AdminProdutoFormPage({
                 </select>
               </div>
             </div>
+
+            {erroExtrator && (
+              <div
+                role="alert"
+                className="rounded-lg border border-red-500/40 bg-red-500/10 p-3 space-y-2.5 text-xs text-red-100"
+              >
+                <p className="flex items-start gap-2 leading-relaxed">
+                  <AlertTriangle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+                  <span>{erroExtrator.mensagem}</span>
+                </p>
+                {erroExtrator.isConfigError && (
+                  <div className="pl-6">
+                    <button
+                      type="button"
+                      onClick={() => setConfigExtratorAberta(true)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-[#22C55E]/40 bg-[#122616] hover:bg-[#19331F] text-xs font-semibold text-[#86EFAC] transition-colors cursor-pointer"
+                    >
+                      <Settings2 className="w-3.5 h-3.5" />
+                      <span>Corrigir e testar extrator agora</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
 
             {avisosExtrator.length > 0 && (
               <div className="rounded-lg border border-amber-400/35 bg-amber-500/10 px-3 py-2.5 space-y-1 text-xs text-amber-200">
@@ -790,6 +839,13 @@ export function AdminProdutoFormPage({
           </div>
         </div>
       </div>
+
+      <ExtratorConfigModal
+        aberto={configExtratorAberta}
+        onFechar={() => setConfigExtratorAberta(false)}
+        onToast={onToast}
+        onConfigAtualizada={() => setErroExtrator(null)}
+      />
     </div>
   );
 }

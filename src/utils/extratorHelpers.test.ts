@@ -373,6 +373,7 @@ test('Google Apps Script doGet valida TOKEN_SECRETO, aceita PropertiesService e 
       PropertiesService: {
         getScriptProperties: () => ({
           getProperty: (chave: string) => scriptProps[chave] ?? null,
+          getProperties: () => ({ ...scriptProps }),
         }),
       },
     };
@@ -387,6 +388,7 @@ test('Google Apps Script doGet valida TOKEN_SECRETO, aceita PropertiesService e 
   const semConfig = executarDoGet({ token: 'qualquer', url: 'https://www.amazon.com.br/dp/B0CH8R3HSR' });
   assert.equal(semConfig.ok, false);
   assert.match(semConfig.erro || '', /não configurado/i);
+  assert.match(semConfig.erro || '', /nenhuma/i);
 
   // Com PropertiesService configurado: token vazio, divergente e com aspas dão mensagens precisas
   const tokenAusente = executarDoGet(
@@ -407,9 +409,17 @@ test('Google Apps Script doGet valida TOKEN_SECRETO, aceita PropertiesService e 
 
   const tokenCertoPassaAuth = executarDoGet(
     { token: ' segredo-producao-123 ', url: 'https://site-fora.exemplo.com/produto' },
-    { TOKEN_SECRETO: ' segredo-producao-123 ' }
+    { ' token_secreto ': ' segredo-producao-123 ' }
   );
   assert.equal(tokenCertoPassaAuth.ok, false);
   assert.match(tokenCertoPassaAuth.erro || '', /Domínio não permitido/i);
+
+  const diagnosticoOk = executarDoGet(
+    { action: 'diagnostico', token: 'segredo-producao-123' },
+    { TOKEN_SECRETO: 'segredo-producao-123' }
+  ) as { ok: boolean; versao?: string; tokenValido?: boolean };
+  assert.equal(diagnosticoOk.ok, true);
+  assert.equal(diagnosticoOk.tokenValido, true);
+  assert.ok(diagnosticoOk.versao);
 });
 

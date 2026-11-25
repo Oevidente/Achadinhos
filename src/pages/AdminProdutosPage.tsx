@@ -9,13 +9,19 @@ import {
   Power,
   RefreshCw,
   Search,
+  Settings2,
   Square,
   Star,
   Trash2,
 } from 'lucide-react';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { ExtratorConfigModal } from '../components/ExtratorConfigModal';
 import { RevalidarPrecoModal } from '../components/RevalidarPrecoModal';
-import { extrairDadosDoLink, type ExtratorResultado } from '../services/extratorService';
+import {
+  ExtratorConfigError,
+  extrairDadosDoLink,
+  type ExtratorResultado,
+} from '../services/extratorService';
 import {
   atualizarPrecoRevalidado,
   atualizarProduto,
@@ -129,6 +135,7 @@ export function AdminProdutosPage({ onNavigate, onToast }: AdminProdutosPageProp
 
   const [progressoLote, setProgressoLote] = useState<ProgressoLote | null>(null);
   const cancelarLoteRef = useRef(false);
+  const [configExtratorAberta, setConfigExtratorAberta] = useState(false);
 
   const carregarProdutos = useCallback(async () => {
     setCarregando(true);
@@ -244,6 +251,9 @@ export function AdminProdutosPage({ onNavigate, onToast }: AdminProdutosPageProp
           ? error.message
           : 'Não foi possível consultar o link deste produto.';
       onToast('erro', msg);
+      if (error instanceof ExtratorConfigError) {
+        setConfigExtratorAberta(true);
+      }
     } finally {
       setRevalidandoId(null);
     }
@@ -384,6 +394,16 @@ export function AdminProdutosPage({ onNavigate, onToast }: AdminProdutosPageProp
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5">
+          <button
+            type="button"
+            onClick={() => setConfigExtratorAberta(true)}
+            disabled={loteEmExecucao}
+            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-lg border border-[#1E2A20] bg-[#0F1410] hover:bg-[#172119] text-sm font-medium text-slate-200 transition-colors cursor-pointer disabled:opacity-50 whitespace-nowrap"
+          >
+            <Settings2 className="w-4 h-4 text-[#22C55E]" />
+            <span>Extrator</span>
+          </button>
+
           <button
             type="button"
             onClick={() => void revalidarTodosOsAtivos()}
@@ -1042,6 +1062,12 @@ export function AdminProdutosPage({ onNavigate, onToast }: AdminProdutosPageProp
         salvando={salvandoRevalidacao}
         onConfirmar={(novoPreco) => void confirmarRevalidacaoIndividual(novoPreco)}
         onCancelar={() => !salvandoRevalidacao && setRevalidacaoModal(null)}
+      />
+
+      <ExtratorConfigModal
+        aberto={configExtratorAberta}
+        onFechar={() => setConfigExtratorAberta(false)}
+        onToast={onToast}
       />
     </div>
   );
