@@ -7,6 +7,7 @@ import {
   formatarTempoRelativo,
   isEmailAdm,
   isHttpsUrl,
+  parsePrecoInput,
   produtoEstaExpirado,
   validarFormularioProduto,
   type ProdutoFormState,
@@ -201,4 +202,22 @@ test('calcularDescontoPercentual calcula desconto inteiro corretamente', () => {
   assert.equal(calcularDescontoPercentual(50, 100), 50);
   assert.equal(calcularDescontoPercentual(100, 100), null);
   assert.equal(calcularDescontoPercentual(100, null), null);
+});
+
+test('parsePrecoInput e validarFormularioProduto interpretam corretamente valores altos em formato brasileiro', () => {
+  assert.equal(parsePrecoInput('4.199'), 4199);
+  assert.equal(parsePrecoInput('4.499'), 4499);
+  assert.equal(parsePrecoInput('4.199,90'), 4199.9);
+  assert.equal(parsePrecoInput('R$ 12.499,00'), 12499);
+  assert.equal(parsePrecoInput('4199.90'), 4199.9);
+  assert.equal(parsePrecoInput('4199,90'), 4199.9);
+
+  const formAlto = validarFormularioProduto({
+    ...formValidoBase,
+    precoAtual: '4.199',
+    precoOriginal: '5.399,90',
+  });
+  assert.equal(formAlto.valido, true);
+  assert.equal(formAlto.precoAtualNum, 4199);
+  assert.equal(formAlto.precoOriginalNum, 5399.9);
 });

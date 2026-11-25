@@ -56,9 +56,38 @@ export function isValidWebUrl(valor: string): boolean {
 }
 
 export function parsePrecoInput(valor: string): number {
-  const limpo = valor.trim().replace(/\s+/g, '').replace(',', '.');
-  if (!limpo) return Number.NaN;
-  return Number(limpo);
+  const bruto = valor.trim().replace(/^R\$\s*/i, '').replace(/\s+/g, '');
+  if (!bruto) return Number.NaN;
+  if (!/^-?[\d.,]+$/.test(bruto)) return Number.NaN;
+
+  const negativo = bruto.startsWith('-');
+  let str = negativo ? bruto.slice(1) : bruto;
+  if (!str || !/\d/.test(str)) return Number.NaN;
+
+  if (str.includes(',') && str.includes('.')) {
+    if (str.lastIndexOf(',') > str.lastIndexOf('.')) {
+      str = str.replace(/\./g, '').replace(',', '.');
+    } else {
+      str = str.replace(/,/g, '');
+    }
+  } else if (str.includes(',')) {
+    const partes = str.split(',');
+    if (partes.length > 2) {
+      str = partes.join('');
+    } else {
+      str = str.replace(',', '.');
+    }
+  } else if (str.includes('.')) {
+    if (/^[1-9]\d{0,2}(?:\.\d{3})+$/.test(str)) {
+      str = str.replace(/\./g, '');
+    } else if (str.split('.').length > 2) {
+      return Number.NaN;
+    }
+  }
+
+  const num = Number(str);
+  if (!Number.isFinite(num)) return Number.NaN;
+  return negativo ? -num : num;
 }
 
 export function validarFormularioProduto(form: ProdutoFormState): {

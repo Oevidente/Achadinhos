@@ -63,7 +63,8 @@ export function normalizarNumeroPreco(valor: unknown): number | null {
   }
   let str = String(valor)
     .trim()
-    .replace(/[^\d.,]/g, '');
+    .replace(/[^\d.,]/g, '')
+    .replace(/^[.,]+|[.,]+$/g, '');
   if (!str) return null;
 
   if (str.includes(',') && str.includes('.')) {
@@ -73,24 +74,142 @@ export function normalizarNumeroPreco(valor: unknown): number | null {
       str = str.replace(/,/g, '');
     }
   } else if (str.includes(',')) {
-    str = str.replace(',', '.');
+    const partes = str.split(',');
+    str = partes.length > 2 ? partes.join('') : str.replace(',', '.');
+  } else if (str.includes('.')) {
+    if (/^[1-9]\d{0,2}(?:\.\d{3})+$/.test(str)) {
+      str = str.replace(/\./g, '');
+    } else if (str.split('.').length > 2) {
+      return null;
+    }
   }
 
   const num = Number(str);
   return Number.isFinite(num) && num > 0 ? Math.round(num * 100) / 100 : null;
 }
 
+export interface PrecosTextoBrl {
+  precoAtual: number | null;
+  precoOriginal: number | null;
+}
+
+export function extrairPrecosDeTextoBrl(texto: string): PrecosTextoBrl {
+  if (!texto) return { precoAtual: null, precoOriginal: null };
+  const regex = /R\$\s*(\d{1,3}(?:\.\d{3})+(?:,\d{1,2})?|\d+(?:[.,]\d{1,2})?)/gi;
+  const candidatos: Array<{
+    valor: number;
+    index: number;
+    endIndex: number;
+    papel: 'atual' | 'original' | 'neutro';
+  }> = [];
+
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(texto)) !== null) {
+    const rawNum = match[1];
+    if (!rawNum) continue;
+    const valor = normalizarNumeroPreco(rawNum);
+    if (valor === null) continue;
+
+    const inicio = match.index;
+    const contextoAntes = texto.slice(Math.max(0, inicio - 40), inicio);
+
+    // Ignora parcelas (ex.: "12x de R$ 349,90", "10x R$ 419,90", "parcelas de R$ ...")
+    if (
+      /(?:\d+\s*x\s*(?:de\s*)?|parcelas?\s*(?:de\s*)?|em\s+at[eé]\s+\d+\s*x\s*(?:de\s*)?)$/i.test(
+        contextoAntes
+      )
+    ) {
+      continue;
+    }
+
+    // Ignora valores de frete grátis, desconto absoluto, cupom mínimo ou cashback
+    if (
+      /(?:acima\s+de|compras\s+(?:de|acima|a\s+partir\s+de)|pedidos\s+(?:de|acima|a\s+partir\s+de)|frete\s+gr[aá]tis[^\n]{0,25}|economize(?:\s+at[eé])?|desconto\s+de|off\s+de|(?:cupom|cashback|b[oô]nus|vale|entrada|juros)\s*(?:de\s*)?)\s*$/i.test(
+        contextoAntes
+      )
+    ) {
+      continue;
+    }
+
+    let papel: 'atual' | 'original' | 'neutro' = 'neutro';
+    if (/\b(?:de|antes|era|tabela|original)\s*:?\s*$/i.test(contextoAntes)) {
+      papel = 'original';
+    } else if (
+      /\b(?:por|agora|a\s+vista|(?:no\s+)?pix)(?:\s+(?:apenas|somente|s[oó]))?\s*:?\s*$/i.test(
+        contextoAntes
+      )
+    ) {
+      papel = 'atual';
+    }
+
+    candidatos.push({
+      valor,
+      index: inicio,
+      endIndex: inicio + match[0].length,
+      papel,
+    });
+  }
+
+  if (candidatos.length === 0) {
+    return { precoAtual: null, precoOriginal: null };
+  }
+
+  const explicitAtual = candidatos.find((c) => c.papel === 'atual');
+  const explicitOriginal = candidatos.find((c) => c.papel === 'original');
+
+  if (explicitAtual && explicitOriginal) {
+    if (explicitOriginal.valor > explicitAtual.valor) {
+      return { precoAtual: explicitAtual.valor, precoOriginal: explicitOriginal.valor };
+    }
+    return { precoAtual: explicitAtual.valor, precoOriginal: null };
+  }
+
+  if (explicitAtual) {
+    const outroMaior = candidatos.find(
+      (c) => c !== explicitAtual && c.valor > explicitAtual.valor
+    );
+    return {
+      precoAtual: explicitAtual.valor,
+      precoOriginal: outroMaior ? outroMaior.valor : null,
+    };
+  }
+
+  if (explicitOriginal) {
+    const outroMenor = candidatos.find(
+      (c) => c !== explicitOriginal && c.valor < explicitOriginal.valor
+    );
+    if (outroMenor) {
+      return { precoAtual: outroMenor.valor, precoOriginal: explicitOriginal.valor };
+    }
+    // Nunca promove um "De R$ ..." isolado para preço atual sem ter o preço promocional
+    return { precoAtual: null, precoOriginal: null };
+  }
+
+  // Sem palavras-chave explícitas: se houver dois preços próximos (ex.: "R$ 5.399 R$ 4.199"),
+  // o maior é o anterior e o menor é o atual
+  if (candidatos.length >= 2) {
+    const primeiro = candidatos[0];
+    const segundo = candidatos[1];
+    if (segundo.index - primeiro.endIndex <= 45 && primeiro.valor !== segundo.valor) {
+      const maior = Math.max(primeiro.valor, segundo.valor);
+      const menor = Math.min(primeiro.valor, segundo.valor);
+      if (maior <= menor * 5) {
+        return { precoAtual: menor, precoOriginal: maior };
+      }
+    }
+  }
+
+  return { precoAtual: candidatos[0].valor, precoOriginal: null };
+}
+
 export function extrairPrecoDeTextoBrl(texto: string): number | null {
-  if (!texto) return null;
-  const match = texto.match(/R\$\s*(\d{1,3}(?:\.\d{3})*,\d{2}|\d+[.,]\d{2}|\d+)/i);
-  if (!match?.[1]) return null;
-  return normalizarNumeroPreco(match[1]);
+  return extrairPrecosDeTextoBrl(texto).precoAtual;
 }
 
 export function limparTituloMarketplace(titulo: string, plataforma: Plataforma): string {
   if (!titulo) return '';
   let t = titulo.trim();
-  t = t.replace(/\s*[-–|]\s*R\$\s*\d{1,3}(?:\.\d{3})*(?:,\d{2})?\s*$/i, '');
+  t = t.replace(/\s*[-–|]\s*R\$\s*\d{1,3}(?:\.\d{3})*(?:,\d{1,2})?\s*$/i, '');
   if (plataforma === 'shopee') {
     t = t.replace(/\s*\|\s*Shopee(?:\s+Brasil)?\s*$/i, '');
   } else if (plataforma === 'mercado_livre') {
@@ -236,24 +355,63 @@ export function extrairMetadadosDeHtml(
   }
 
   if (plataforma === 'mercado_livre') {
-    const curMatch = html.match(
-      /"current_price"\s*:\s*\{\s*"value"\s*:\s*([\d.]+)(?:\s*,\s*"currency"\s*:\s*"([A-Z]{3})")?/i
+    const curBlockMatch = html.match(
+      /"current_price"\s*:\s*\{([^}]{0,260}"value"\s*:\s*"?\d+(?:[.,]\d+)*"?[^}]{0,260})\}/i
     );
-    if (curMatch?.[1]) {
-      const cur = normalizarNumeroPreco(curMatch[1]);
+    if (curBlockMatch?.[1]) {
+      const blocoCur = curBlockMatch[1];
+      const valMatch = blocoCur.match(/"value"\s*:\s*"?(\d+(?:[.,]\d+)*)"?/i);
+      const curCurrencyMatch = blocoCur.match(/"currency"\s*:\s*"([A-Z]{3})"/i);
+      const cur = valMatch?.[1] ? normalizarNumeroPreco(valMatch[1]) : null;
       if (cur !== null) {
         precoAtual = cur;
         confiancaPreco = 'alta';
-        if (curMatch[2]) moeda = curMatch[2].toUpperCase();
+        if (curCurrencyMatch?.[1]) moeda = curCurrencyMatch[1].toUpperCase();
+      }
+
+      // Busca previous_price / original_price / regular_amount apenas na janela próxima do preço principal
+      const idxCur = curBlockMatch.index ?? 0;
+      const janela = html.slice(Math.max(0, idxCur - 400), idxCur + 600);
+      const prevBlockMatch = janela.match(
+        /"previous_price"\s*:\s*\{([^}]{0,260}"value"\s*:\s*"?\d+(?:[.,]\d+)*"?[^}]{0,260})\}/i
+      );
+      if (prevBlockMatch?.[1]) {
+        const prevValMatch = prevBlockMatch[1].match(/"value"\s*:\s*"?(\d+(?:[.,]\d+)*)"?/i);
+        const prev = prevValMatch?.[1] ? normalizarNumeroPreco(prevValMatch[1]) : null;
+        if (precoAtual !== null && prev !== null && prev > precoAtual) {
+          precoOriginal = prev;
+        }
+      }
+      if (precoOriginal === null) {
+        const origInlineMatch = janela.match(
+          /"(?:original_price|regular_amount|original_value|previous_price)"\s*:\s*"?(\d+(?:[.,]\d+)*)"?/i
+        );
+        const origVal = origInlineMatch?.[1] ? normalizarNumeroPreco(origInlineMatch[1]) : null;
+        if (precoAtual !== null && origVal !== null && origVal > precoAtual) {
+          precoOriginal = origVal;
+        }
+      }
+    } else {
+      const priceObjMatch = html.match(
+        /"price"\s*:\s*\{([^}]{0,260}"amount"\s*:\s*"?\d+(?:[.,]\d+)*"?[^}]{0,260})\}/i
+      );
+      if (priceObjMatch?.[1]) {
+        const amountMatch = priceObjMatch[1].match(/"amount"\s*:\s*"?(\d+(?:[.,]\d+)*)"?/i);
+        const regMatch = priceObjMatch[1].match(
+          /"(?:regular_amount|original_price|original_value)"\s*:\s*"?(\d+(?:[.,]\d+)*)"?/i
+        );
+        const cur = amountMatch?.[1] ? normalizarNumeroPreco(amountMatch[1]) : null;
+        if (cur !== null) {
+          precoAtual = cur;
+          confiancaPreco = 'alta';
+          const reg = regMatch?.[1] ? normalizarNumeroPreco(regMatch[1]) : null;
+          if (reg !== null && reg > cur) {
+            precoOriginal = reg;
+          }
+        }
       }
     }
-    const prevMatch = html.match(/"previous_price"\s*:\s*\{\s*"value"\s*:\s*([\d.]+)/i);
-    if (prevMatch?.[1]) {
-      const prev = normalizarNumeroPreco(prevMatch[1]);
-      if (prev !== null && prev > (precoAtual ?? 0)) {
-        precoOriginal = prev;
-      }
-    }
+
     const titleJsonMatch = html.match(
       /"type"\s*:\s*"title"[\s\S]{0,120}?"text"\s*:\s*"([^"]{3,240})"/i
     );
@@ -299,14 +457,38 @@ export function extrairMetadadosDeHtml(
   }
 
   if (precoAtual === null) {
-    const precoTexto =
-      extrairPrecoDeTextoBrl(titulo) ||
-      extrairPrecoDeTextoBrl(extrairMetaTagHtml(html, 'property', 'og:title')) ||
-      extrairPrecoDeTextoBrl(descricao);
-    if (precoTexto !== null) {
-      precoAtual = precoTexto;
+    const ogTitleRaw = extrairMetaTagHtml(html, 'property', 'og:title');
+    const daDescricao = extrairPrecosDeTextoBrl(descricao);
+    const doTitulo = extrairPrecosDeTextoBrl(titulo);
+    const doOgTitulo = extrairPrecosDeTextoBrl(ogTitleRaw);
+
+    const escolhido =
+      (daDescricao.precoAtual !== null && daDescricao.precoOriginal !== null
+        ? daDescricao
+        : null) ??
+      (doTitulo.precoAtual !== null ? doTitulo : null) ??
+      (doOgTitulo.precoAtual !== null ? doOgTitulo : null) ??
+      (daDescricao.precoAtual !== null ? daDescricao : null);
+
+    if (escolhido && escolhido.precoAtual !== null) {
+      precoAtual = escolhido.precoAtual;
+      if (precoOriginal === null && escolhido.precoOriginal !== null) {
+        precoOriginal = escolhido.precoOriginal;
+      }
       confiancaPreco = 'alta';
     }
+  } else if (precoOriginal === null) {
+    const daDescricao = extrairPrecosDeTextoBrl(descricao);
+    if (
+      daDescricao.precoOriginal !== null &&
+      daDescricao.precoOriginal > precoAtual
+    ) {
+      precoOriginal = daDescricao.precoOriginal;
+    }
+  }
+
+  if (precoAtual === null || (precoOriginal !== null && precoOriginal <= precoAtual)) {
+    precoOriginal = null;
   }
 
   if (!titulo) {
@@ -383,23 +565,26 @@ export function normalizarRespostaExtrator(
       : '';
   const imagemUrl = imagemUrlBruta || fallbackUrl?.imagemUrl || '';
 
-  const precoAtualNum =
-    dados.precoAtual === null || dados.precoAtual === undefined
-      ? null
-      : Number(dados.precoAtual);
-  const precoAtual =
-    precoAtualNum !== null && Number.isFinite(precoAtualNum) && precoAtualNum > 0
-      ? Math.round(precoAtualNum * 100) / 100
-      : extrairPrecoDeTextoBrl(tituloBruto) ?? extrairPrecoDeTextoBrl(descricao);
+  const precosTitulo = extrairPrecosDeTextoBrl(tituloBruto);
+  const precosDesc = extrairPrecosDeTextoBrl(descricao);
 
-  const precoOrigNum =
-    dados.precoOriginal === null || dados.precoOriginal === undefined
-      ? null
-      : Number(dados.precoOriginal);
-  const precoOriginal =
-    precoOrigNum !== null && Number.isFinite(precoOrigNum) && precoOrigNum > 0
-      ? Math.round(precoOrigNum * 100) / 100
-      : null;
+  const precoAtualServidor = normalizarNumeroPreco(dados.precoAtual);
+  const precoAtual =
+    precoAtualServidor ??
+    (precosDesc.precoAtual !== null && precosDesc.precoOriginal !== null
+      ? precosDesc.precoAtual
+      : precosTitulo.precoAtual ?? precosDesc.precoAtual);
+
+  const precoOriginalServidor = normalizarNumeroPreco(dados.precoOriginal);
+  let precoOriginal =
+    precoOriginalServidor ??
+    precosDesc.precoOriginal ??
+    precosTitulo.precoOriginal ??
+    null;
+
+  if (precoAtual === null || (precoOriginal !== null && precoOriginal <= precoAtual)) {
+    precoOriginal = null;
+  }
 
   const confiancaBruta = String(dados.confiancaPreco ?? '');
   const confiancaPreco: ConfiancaPreco =

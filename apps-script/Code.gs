@@ -281,7 +281,7 @@ function gerarChaveCache_(url) {
       return ('0' + v.toString(16)).slice(-2);
     })
     .join('');
-  return 'prod_v2_' + hex;
+  return 'prod_v3_' + hex;
 }
 
 function extrairHostname_(url) {
@@ -376,7 +376,7 @@ function extrairMetadadosProduto_(html, plataforma, urlsVisitadas) {
       precoAtual = ml.precoAtual;
       confiancaPreco = 'alta';
     }
-    if (ml.precoOriginal !== null && ml.precoOriginal > (precoAtual || 0)) {
+    if (precoAtual !== null && ml.precoOriginal !== null && ml.precoOriginal > precoAtual) {
       precoOriginal = ml.precoOriginal;
     }
     if (ml.moeda) moeda = ml.moeda;
@@ -455,16 +455,40 @@ function extrairMetadadosProduto_(html, plataforma, urlsVisitadas) {
     }
   }
 
-  // 3. Fallback de preço em texto (ex.: Mercado Livre og:title / og:description "- R$ 371,07")
+  // 3. Fallback de preço em texto (ex.: "De R$ 5.399 por R$ 4.199" ou "- R$ 4.199")
   if (precoAtual === null) {
-    var precoTexto =
-      extrairPrecoDeTextoBrl_(titulo) ||
-      extrairPrecoDeTextoBrl_(extrairMetaTag_(html, 'property', 'og:title')) ||
-      extrairPrecoDeTextoBrl_(descricao);
-    if (precoTexto !== null) {
-      precoAtual = precoTexto;
+    var ogTitleRaw = extrairMetaTag_(html, 'property', 'og:title');
+    var daDescricao = extrairPrecosDeTextoBrl_(descricao);
+    var doTitulo = extrairPrecosDeTextoBrl_(titulo);
+    var doOgTitulo = extrairPrecosDeTextoBrl_(ogTitleRaw);
+
+    var escolhido = null;
+    if (daDescricao.precoAtual !== null && daDescricao.precoOriginal !== null) {
+      escolhido = daDescricao;
+    } else if (doTitulo.precoAtual !== null) {
+      escolhido = doTitulo;
+    } else if (doOgTitulo.precoAtual !== null) {
+      escolhido = doOgTitulo;
+    } else if (daDescricao.precoAtual !== null) {
+      escolhido = daDescricao;
+    }
+
+    if (escolhido && escolhido.precoAtual !== null) {
+      precoAtual = escolhido.precoAtual;
+      if (precoOriginal === null && escolhido.precoOriginal !== null) {
+        precoOriginal = escolhido.precoOriginal;
+      }
       confiancaPreco = 'alta';
     }
+  } else if (precoOriginal === null) {
+    var origDaDescricao = extrairPrecosDeTextoBrl_(descricao);
+    if (origDaDescricao.precoOriginal !== null && origDaDescricao.precoOriginal > precoAtual) {
+      precoOriginal = origDaDescricao.precoOriginal;
+    }
+  }
+
+  if (precoAtual === null || (precoOriginal !== null && precoOriginal <= precoAtual)) {
+    precoOriginal = null;
   }
 
   // 4. Fallback de título: <title> (desde que não seja página de Security Check) ou slug da URL
@@ -532,23 +556,61 @@ function extrairDadosMercadoLivre_(html) {
   };
   if (!html) return res;
 
-  // JSON de componentes (/social/... e /p/MLB...)
-  var currentPriceMatch = html.match(
-    /"current_price"\s*:\s*\{\s*"value"\s*:\s*([\d.]+)(?:\s*,\s*"currency"\s*:\s*"([A-Z]{3})")?/i
+  // JSON de componentes (/social/... e /p/MLB...) independente da ordem das chaves
+  var curBlockMatch = html.match(
+    /"current_price"\s*:\s*\{([^}]{0,260}"value"\s*:\s*"?\d+(?:[.,]\d+)*"?[^}]{0,260})\}/i
   );
-  if (currentPriceMatch && currentPriceMatch[1]) {
-    var cur = normalizarNumeroPreco_(currentPriceMatch[1]);
+  if (curBlockMatch && curBlockMatch[1]) {
+    var blocoCur = curBlockMatch[1];
+    var valMatch = blocoCur.match(/"value"\s*:\s*"?(\d+(?:[.,]\d+)*)"?/i);
+    var curCurrencyMatch = blocoCur.match(/"currency"\s*:\s*"([A-Z]{3})"/i);
+    var cur = valMatch && valMatch[1] ? normalizarNumeroPreco_(valMatch[1]) : null;
     if (cur !== null) {
       res.precoAtual = cur;
-      if (currentPriceMatch[2]) res.moeda = currentPriceMatch[2].toUpperCase();
+      if (curCurrencyMatch && curCurrencyMatch[1]) {
+        res.moeda = curCurrencyMatch[1].toUpperCase();
+      }
     }
-  }
 
-  var prevPriceMatch = html.match(/"previous_price"\s*:\s*\{\s*"value"\s*:\s*([\d.]+)/i);
-  if (prevPriceMatch && prevPriceMatch[1]) {
-    var prev = normalizarNumeroPreco_(prevPriceMatch[1]);
-    if (prev !== null) {
-      res.precoOriginal = prev;
+    // Busca preço anterior apenas na janela próxima do componente de preço principal
+    var idxCur = curBlockMatch.index || 0;
+    var janela = html.slice(Math.max(0, idxCur - 400), idxCur + 600);
+    var prevBlockMatch = janela.match(
+      /"previous_price"\s*:\s*\{([^}]{0,260}"value"\s*:\s*"?\d+(?:[.,]\d+)*"?[^}]{0,260})\}/i
+    );
+    if (prevBlockMatch && prevBlockMatch[1]) {
+      var prevValMatch = prevBlockMatch[1].match(/"value"\s*:\s*"?(\d+(?:[.,]\d+)*)"?/i);
+      var prev = prevValMatch && prevValMatch[1] ? normalizarNumeroPreco_(prevValMatch[1]) : null;
+      if (res.precoAtual !== null && prev !== null && prev > res.precoAtual) {
+        res.precoOriginal = prev;
+      }
+    }
+    if (res.precoOriginal === null) {
+      var origInlineMatch = janela.match(
+        /"(?:original_price|regular_amount|original_value|previous_price)"\s*:\s*"?(\d+(?:[.,]\d+)*)"?/i
+      );
+      var origVal = origInlineMatch && origInlineMatch[1] ? normalizarNumeroPreco_(origInlineMatch[1]) : null;
+      if (res.precoAtual !== null && origVal !== null && origVal > res.precoAtual) {
+        res.precoOriginal = origVal;
+      }
+    }
+  } else {
+    var priceObjMatch = html.match(
+      /"price"\s*:\s*\{([^}]{0,260}"amount"\s*:\s*"?\d+(?:[.,]\d+)*"?[^}]{0,260})\}/i
+    );
+    if (priceObjMatch && priceObjMatch[1]) {
+      var amountMatch = priceObjMatch[1].match(/"amount"\s*:\s*"?(\d+(?:[.,]\d+)*)"?/i);
+      var regMatch = priceObjMatch[1].match(
+        /"(?:regular_amount|original_price|original_value)"\s*:\s*"?(\d+(?:[.,]\d+)*)"?/i
+      );
+      var curAmount = amountMatch && amountMatch[1] ? normalizarNumeroPreco_(amountMatch[1]) : null;
+      if (curAmount !== null) {
+        res.precoAtual = curAmount;
+        var regVal = regMatch && regMatch[1] ? normalizarNumeroPreco_(regMatch[1]) : null;
+        if (regVal !== null && regVal > curAmount) {
+          res.precoOriginal = regVal;
+        }
+      }
     }
   }
 
@@ -559,9 +621,23 @@ function extrairDadosMercadoLivre_(html) {
 
   // Fallback para páginas padrão de produto ML (state JSON / schema)
   if (res.precoAtual === null) {
-    var tracksMatch = html.match(/"tracks"\s*:\s*\{\s*"price"\s*:[\s\S]{0,250}?"price"\s*:\s*([\d.]+)/i);
+    var tracksMatch = html.match(/"tracks"\s*:\s*\{\s*"price"\s*:[\s\S]{0,250}?"price"\s*:\s*"?(\d+(?:[.,]\d+)*)"?/i);
     if (tracksMatch && tracksMatch[1]) {
       res.precoAtual = normalizarNumeroPreco_(tracksMatch[1]);
+      if (res.precoAtual !== null && res.precoOriginal === null && typeof tracksMatch.index === 'number') {
+        var janelaTracks = html.slice(
+          Math.max(0, tracksMatch.index - 200),
+          tracksMatch.index + 500
+        );
+        var origTracksMatch = janelaTracks.match(
+          /"(?:original_price|regular_amount|previous_price)"\s*:\s*"?(\d+(?:[.,]\d+)*)"?/i
+        );
+        var origTracks =
+          origTracksMatch && origTracksMatch[1] ? normalizarNumeroPreco_(origTracksMatch[1]) : null;
+        if (origTracks !== null && origTracks > res.precoAtual) {
+          res.precoOriginal = origTracks;
+        }
+      }
     }
   }
 
@@ -595,7 +671,7 @@ function extrairOgInfoDeUrls_(urls) {
 function extrairPrecoJsonEmbutido_(html, chaves) {
   if (!html) return null;
   for (var i = 0; i < chaves.length; i++) {
-    var regex = new RegExp('"' + chaves[i] + '"\\s*:\\s*"?([\\d.,]+)"?', 'i');
+    var regex = new RegExp('"' + chaves[i] + '"\\s*:\\s*"?(\\d+(?:[.,]\\d+)*)"?', 'i');
     var m = html.match(regex);
     if (m && m[1]) {
       var num = normalizarNumeroPreco_(m[1]);
@@ -605,11 +681,122 @@ function extrairPrecoJsonEmbutido_(html, chaves) {
   return null;
 }
 
+function extrairPrecosDeTextoBrl_(texto) {
+  if (!texto) return { precoAtual: null, precoOriginal: null };
+  var str = String(texto);
+  var regex = /R\$\s*(\d{1,3}(?:\.\d{3})+(?:,\d{1,2})?|\d+(?:[.,]\d{1,2})?)/gi;
+  var candidatos = [];
+
+  var match;
+  while ((match = regex.exec(str)) !== null) {
+    var rawNum = match[1];
+    if (!rawNum) continue;
+    var valor = normalizarNumeroPreco_(rawNum);
+    if (valor === null) continue;
+
+    var inicio = match.index;
+    var contextoAntes = str.slice(Math.max(0, inicio - 40), inicio);
+
+    // Ignora parcelas (ex.: "12x de R$ 349,90", "10x R$ 419,90")
+    if (
+      /(?:\d+\s*x\s*(?:de\s*)?|parcelas?\s*(?:de\s*)?|em\s+at[eé]\s+\d+\s*x\s*(?:de\s*)?)$/i.test(
+        contextoAntes
+      )
+    ) {
+      continue;
+    }
+
+    // Ignora thresholds de frete, descontos absolutos, cupons e cashback
+    if (
+      /(?:acima\s+de|compras\s+(?:de|acima|a\s+partir\s+de)|pedidos\s+(?:de|acima|a\s+partir\s+de)|frete\s+gr[aá]tis[^\n]{0,25}|economize(?:\s+at[eé])?|desconto\s+de|off\s+de|(?:cupom|cashback|b[oô]nus|vale|entrada|juros)\s*(?:de\s*)?)\s*$/i.test(
+        contextoAntes
+      )
+    ) {
+      continue;
+    }
+
+    var papel = 'neutro';
+    if (/\b(?:de|antes|era|tabela|original)\s*:?\s*$/i.test(contextoAntes)) {
+      papel = 'original';
+    } else if (
+      /\b(?:por|agora|a\s+vista|(?:no\s+)?pix)(?:\s+(?:apenas|somente|s[oó]))?\s*:?\s*$/i.test(
+        contextoAntes
+      )
+    ) {
+      papel = 'atual';
+    }
+
+    candidatos.push({
+      valor: valor,
+      index: inicio,
+      endIndex: inicio + match[0].length,
+      papel: papel,
+    });
+  }
+
+  if (candidatos.length === 0) {
+    return { precoAtual: null, precoOriginal: null };
+  }
+
+  var explicitAtual = null;
+  var explicitOriginal = null;
+  for (var i = 0; i < candidatos.length; i++) {
+    if (!explicitAtual && candidatos[i].papel === 'atual') explicitAtual = candidatos[i];
+    if (!explicitOriginal && candidatos[i].papel === 'original') explicitOriginal = candidatos[i];
+  }
+
+  if (explicitAtual && explicitOriginal) {
+    return {
+      precoAtual: explicitAtual.valor,
+      precoOriginal: explicitOriginal.valor > explicitAtual.valor ? explicitOriginal.valor : null,
+    };
+  }
+
+  if (explicitAtual) {
+    var outroMaior = null;
+    for (var j = 0; j < candidatos.length; j++) {
+      if (candidatos[j] !== explicitAtual && candidatos[j].valor > explicitAtual.valor) {
+        outroMaior = candidatos[j];
+        break;
+      }
+    }
+    return {
+      precoAtual: explicitAtual.valor,
+      precoOriginal: outroMaior ? outroMaior.valor : null,
+    };
+  }
+
+  if (explicitOriginal) {
+    var outroMenor = null;
+    for (var k = 0; k < candidatos.length; k++) {
+      if (candidatos[k] !== explicitOriginal && candidatos[k].valor < explicitOriginal.valor) {
+        outroMenor = candidatos[k];
+        break;
+      }
+    }
+    if (outroMenor) {
+      return { precoAtual: outroMenor.valor, precoOriginal: explicitOriginal.valor };
+    }
+    return { precoAtual: null, precoOriginal: null };
+  }
+
+  if (candidatos.length >= 2) {
+    var primeiro = candidatos[0];
+    var segundo = candidatos[1];
+    if (segundo.index - primeiro.endIndex <= 45 && primeiro.valor !== segundo.valor) {
+      var maior = Math.max(primeiro.valor, segundo.valor);
+      var menor = Math.min(primeiro.valor, segundo.valor);
+      if (maior <= menor * 5) {
+        return { precoAtual: menor, precoOriginal: maior };
+      }
+    }
+  }
+
+  return { precoAtual: candidatos[0].valor, precoOriginal: null };
+}
+
 function extrairPrecoDeTextoBrl_(texto) {
-  if (!texto) return null;
-  var m = String(texto).match(/R\$\s*(\d{1,3}(?:\.\d{3})*,\d{2}|\d+[.,]\d{2}|\d+)/i);
-  if (!m || !m[1]) return null;
-  return normalizarNumeroPreco_(m[1]);
+  return extrairPrecosDeTextoBrl_(texto).precoAtual;
 }
 
 function extrairTituloDoSlugUrl_(url, plataforma) {
@@ -635,7 +822,7 @@ function extrairTituloDoSlugUrl_(url, plataforma) {
 function limparTituloMarketplace_(titulo, plataforma) {
   if (!titulo) return '';
   var t = String(titulo).trim();
-  t = t.replace(/\s*[-–|]\s*R\$\s*\d{1,3}(?:\.\d{3})*(?:,\d{2})?\s*$/i, '');
+  t = t.replace(/\s*[-–|]\s*R\$\s*\d{1,3}(?:\.\d{3})*(?:,\d{1,2})?\s*$/i, '');
   if (plataforma === 'shopee') {
     t = t.replace(/\s*\|\s*Shopee(?:\s+Brasil)?\s*$/i, '');
   } else if (plataforma === 'mercado_livre') {
@@ -724,6 +911,23 @@ function extrairOfertaJsonLd_(offers) {
     var bruto = o.price !== undefined ? o.price : o.lowPrice;
     var num = normalizarNumeroPreco_(bruto);
     var highNum = o.highPrice !== undefined ? normalizarNumeroPreco_(o.highPrice) : null;
+
+    if ((highNum === null || (num !== null && highNum <= num)) && o.priceSpecification) {
+      var specs = Array.isArray(o.priceSpecification) ? o.priceSpecification : [o.priceSpecification];
+      for (var s = 0; s < specs.length; s++) {
+        var sp = specs[s];
+        if (!sp || typeof sp !== 'object') continue;
+        var pType = String(sp.priceType || '');
+        if (/ListPrice|StrikethroughPrice/i.test(pType)) {
+          var candOrig = normalizarNumeroPreco_(sp.price);
+          if (candOrig !== null && (num === null || candOrig > num)) {
+            highNum = candOrig;
+            break;
+          }
+        }
+      }
+    }
+
     if (num !== null && num > 0) {
       return {
         preco: num,
@@ -786,7 +990,7 @@ function normalizarNumeroPreco_(valor) {
   if (typeof valor === 'number') {
     return isFinite(valor) && valor > 0 ? Math.round(valor * 100) / 100 : null;
   }
-  var str = String(valor).trim().replace(/[^\d.,]/g, '');
+  var str = String(valor).trim().replace(/[^\d.,]/g, '').replace(/^[.,]+|[.,]+$/g, '');
   if (!str) return null;
 
   if (str.indexOf(',') !== -1 && str.indexOf('.') !== -1) {
@@ -796,7 +1000,14 @@ function normalizarNumeroPreco_(valor) {
       str = str.replace(/,/g, '');
     }
   } else if (str.indexOf(',') !== -1) {
-    str = str.replace(',', '.');
+    var partesVirgula = str.split(',');
+    str = partesVirgula.length > 2 ? partesVirgula.join('') : str.replace(',', '.');
+  } else if (str.indexOf('.') !== -1) {
+    if (/^[1-9]\d{0,2}(?:\.\d{3})+$/.test(str)) {
+      str = str.replace(/\./g, '');
+    } else if (str.split('.').length > 2) {
+      return null;
+    }
   }
 
   var num = Number(str);

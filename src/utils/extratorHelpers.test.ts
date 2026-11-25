@@ -6,9 +6,11 @@ import assert from 'node:assert/strict';
 import {
   extrairMetadadosDeHtml,
   extrairMetadadosPelaUrlLocal,
+  extrairPrecosDeTextoBrl,
   formatarPrecoParaInput,
   isDominioPermitidoExtrator,
   montarUrlRequisicaoExtrator,
+  normalizarNumeroPreco,
   normalizarRespostaExtrator,
 } from './extratorHelpers';
 
@@ -204,10 +206,107 @@ test('Google Apps Script (apps-script/Code.gs) extrai Shopee, Mercado Livre e Ti
   assert.equal(ttRes.titulo, 'Fone Bluetooth Mini');
   assert.equal(ttRes.imagemUrl, 'https://p16.tiktokcdn.com/img.jpg');
   assert.equal(ttRes.precoAtual, null);
+  // Mercado Livre /social/ com chaves invertidas, valores altos e carrossel distante
+  const mlAltoRes = extrairMetadadosProduto(
+    `<meta property="og:title" content="Notebook Gamer - R$ 4.199"><meta property="og:image" content="https://http2.mlstatic.com/note.jpg"><script>{"type":"title","text":"Notebook Gamer RTX","current_price":{"currency":"BRL","value":4199},"previous_price":{"currency":"BRL","value":5399}}</script>${'x'.repeat(900)}<script>{"previous_price":{"value":9999}}</script>`,
+    'mercado_livre',
+    ['https://www.mercadolivre.com.br/social/andreluiz1902']
+  );
+  assert.equal(mlAltoRes.precoAtual, 4199);
+  assert.equal(mlAltoRes.precoOriginal, 5399);
+
+  // Texto BRL em descrição: "De R$ 5.399 por R$ 4.199 (12x de R$ 349,90)" e JSON-LD ListPrice
+  const brlTextoRes = extrairMetadadosProduto(
+    `<meta property="og:title" content="Smart TV 65 4K"><meta property="og:description" content="De R$ 5.399 por apenas R$ 4.199 em até 12x de R$ 349,90. Cupom de R$ 100.">`,
+    'shopee',
+    ['https://shopee.com.br/Smart-TV-i.1.2']
+  );
+  assert.equal(brlTextoRes.precoAtual, 4199);
+  assert.equal(brlTextoRes.precoOriginal, 5399);
+
+  // Nunca confunde "De R$ 5.399" isolado com preço atual
+  const deIsoladoRes = extrairMetadadosProduto(
+    `<meta property="og:title" content="Console X"><meta property="og:description" content="De R$ 5.399 com entrega rápida">`,
+    'shopee',
+    ['https://shopee.com.br/Console-i.1.2']
+  );
+  assert.equal(deIsoladoRes.precoAtual, null);
+  assert.equal(deIsoladoRes.precoOriginal, null);
+
+  // JSON-LD com priceSpecification ListPrice
+  const jsonLdRes = extrairMetadadosProduto(
+    `<script type="application/ld+json">{"@type":"Product","name":"Geladeira Frost Free","offers":{"@type":"Offer","price":4199,"priceCurrency":"BRL","priceSpecification":[{"@type":"UnitPriceSpecification","priceType":"https://schema.org/ListPrice","price":5499}]}}</script>`,
+    'kabum',
+    ['https://www.kabum.com.br/produto/123']
+  );
+  assert.equal(jsonLdRes.precoAtual, 4199);
+  assert.equal(jsonLdRes.precoOriginal, 5499);
+});
+
+test('normalizarNumeroPreco e extrairPrecosDeTextoBrl não truncam valores altos como 4.199 ou 4.499', () => {
+  assert.equal(normalizarNumeroPreco('4.199'), 4199);
+  assert.equal(normalizarNumeroPreco('4.499'), 4499);
+  assert.equal(normalizarNumeroPreco('12.499,90'), 12499.9);
+  assert.equal(normalizarNumeroPreco('4199.9'), 4199.9);
+
+  assert.deepEqual(extrairPrecosDeTextoBrl('Notebook - R$ 4.199'), {
+    precoAtual: 4199,
+    precoOriginal: null,
+  });
+  assert.deepEqual(extrairPrecosDeTextoBrl('TV 4K - R$ 4.499 em 10x de R$ 449,90'), {
+    precoAtual: 4499,
+    precoOriginal: null,
+  });
+  assert.deepEqual(extrairPrecosDeTextoBrl('De R$ 5.499 por apenas R$ 4.199 (12x de R$ 349,90)'), {
+    precoAtual: 4199,
+    precoOriginal: 5499,
+  });
+  assert.deepEqual(extrairPrecosDeTextoBrl('Oferta R$ 5.399 R$ 4.199'), {
+    precoAtual: 4199,
+    precoOriginal: 5399,
+  });
+  assert.deepEqual(extrairPrecosDeTextoBrl('De R$ 5.399'), {
+    precoAtual: null,
+    precoOriginal: null,
+  });
+});
+
+test('extrairMetadadosDeHtml lida com current_price invertido, amount/regular_amount e carrossel distante no ML', () => {
+  const htmlMl = `
+    <html><head>
+      <meta property="og:title" content="Notebook Pro - R$ 4.199">
+      <meta property="og:image" content="https://http2.mlstatic.com/note.jpg">
+    </head><body>
+      <script>{"components":[{"type":"title","text":"Notebook Pro 16GB"},{"type":"price","current_price":{"currency":"BRL","value":4199},"previous_price":{"currency":"BRL","value":5399}}]}</script>
+      ${'x'.repeat(900)}
+      <script>{"previous_price":{"value":9999}}</script>
+    </body></html>
+  `;
+  const res = extrairMetadadosDeHtml(htmlMl, 'https://www.mercadolivre.com.br/social/teste');
+  assert.ok(res);
+  assert.equal(res.precoAtual, 4199);
+  assert.equal(res.precoOriginal, 5399);
+
+  const htmlMlAmount = `
+    <html><head>
+      <meta property="og:title" content="Placa de Vídeo RTX">
+      <meta property="og:image" content="https://http2.mlstatic.com/rtx.jpg">
+    </head><body>
+      <script>{"price":{"amount":4499,"regular_amount":5899}}</script>
+    </body></html>
+  `;
+  const resAmount = extrairMetadadosDeHtml(
+    htmlMlAmount,
+    'https://www.mercadolivre.com.br/placa-p/MLB12345'
+  );
+  assert.ok(resAmount);
+  assert.equal(resAmount.precoAtual, 4499);
+  assert.equal(resAmount.precoOriginal, 5899);
 });
 
 test('formatarPrecoParaInput formata preço para vírgula brasileira', () => {
   assert.equal(formatarPrecoParaInput(199.9), '199,90');
+  assert.equal(formatarPrecoParaInput(4199), '4199,00');
   assert.equal(formatarPrecoParaInput(null), '');
   assert.equal(formatarPrecoParaInput(0), '');
 });
