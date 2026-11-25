@@ -23,12 +23,24 @@ test('isDominioPermitidoExtrator aceita marketplaces conhecidos e recusa outros 
     true
   );
   assert.equal(isDominioPermitidoExtrator('https://amzn.to/3XYZabc'), true);
+  assert.equal(isDominioPermitidoExtrator('https://link.amazon/B0c64ySiV'), true);
+  assert.equal(isDominioPermitidoExtrator('https://amzlinks.in/B0c64ySiV'), true);
+  assert.equal(isDominioPermitidoExtrator('https://a.co/d/9xYz123'), true);
+  assert.equal(isDominioPermitidoExtrator('https://amzn.eu/d/9xYz123'), true);
+  assert.equal(isDominioPermitidoExtrator('https://www.amazon.com.br/Echo-Dot-5a-geracao/dp/B09B8VGCR8'), true);
   assert.equal(isDominioPermitidoExtrator('https://s.shopee.com.br/oferta'), true);
   assert.equal(isDominioPermitidoExtrator('https://vt.tiktok.com/ZS9P5NFGcubRK-81k11/'), true);
 
   assert.equal(isDominioPermitidoExtrator('http://www.mercadolivre.com.br/produto'), false);
   assert.equal(isDominioPermitidoExtrator('https://site-aleatorio.exemplo.com/produto'), false);
   assert.equal(isDominioPermitidoExtrator('https://localhost/admin'), false);
+
+  const amazonSlug = extrairMetadadosPelaUrlLocal(
+    'https://www.amazon.com.br/Echo-Dot-5a-geracao/dp/B09B8VGCR8'
+  );
+  assert.ok(amazonSlug);
+  assert.equal(amazonSlug.plataforma, 'amazon');
+  assert.equal(amazonSlug.titulo, 'Echo Dot 5a geracao');
 });
 
 test('montarUrlRequisicaoExtrator codifica url e token como query params', () => {
@@ -241,6 +253,35 @@ test('Google Apps Script (apps-script/Code.gs) extrai Shopee, Mercado Livre e Ti
   );
   assert.equal(jsonLdRes.precoAtual, 4199);
   assert.equal(jsonLdRes.precoOriginal, 5499);
+
+  // Amazon HTML real: productTitle, landingImage HD, priceAmount + basisPrice + entidades + link.amazon/amzlinks.in
+  const extrairRedirecionamentoHtml = context.extrairRedirecionamentoHtml_ as (
+    html: string,
+    baseUrl: string
+  ) => string;
+  assert.equal(
+    detectarPlataformaFinal(['https://link.amazon/B0c64ySiV'], '', 'amazon'),
+    'amazon'
+  );
+  assert.equal(
+    extrairRedirecionamentoHtml(
+      `<base href="https://r.amzlinks.in?btn_ref=1&amp;btn_url=https%3A%2F%2Fwww.amazon.com.br%2Fdp%2FB0CH8R3HSR%3Ftag%3Dabc">`,
+      'https://amzlinks.in/B0c64ySiV'
+    ),
+    'https://www.amazon.com.br/dp/B0CH8R3HSR?tag=abc'
+  );
+  const amzCodeGsRes = extrairMetadadosProduto(
+    `<span id="productTitle">Jogo de Frigideiras Alum&iacute;nio 03 Pe&ccedil;as</span><img id="landingImage" data-old-hires="https://m.media-amazon.com/images/I/912-0XnKf-L._AC_SL1500_.jpg"><div class="twister-plus-buying-options-price-data">{"desktop_buybox_group_1":[{"priceAmount":74.89}]}</div><span class="apex-basisprice-offscreen-label">De: R$ 115,09</span>`,
+    'amazon',
+    ['https://www.amazon.com.br/dp/B0CH8R3HSR']
+  );
+  assert.equal(amzCodeGsRes.titulo, 'Jogo de Frigideiras Alumínio 03 Peças');
+  assert.equal(
+    amzCodeGsRes.imagemUrl,
+    'https://m.media-amazon.com/images/I/912-0XnKf-L._AC_SL1500_.jpg'
+  );
+  assert.equal(amzCodeGsRes.precoAtual, 74.89);
+  assert.equal(amzCodeGsRes.precoOriginal, 115.09);
 });
 
 test('normalizarNumeroPreco e extrairPrecosDeTextoBrl não truncam valores altos como 4.199 ou 4.499', () => {

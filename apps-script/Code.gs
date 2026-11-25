@@ -14,11 +14,33 @@ var CACHE_EXPIRACAO_SEGUNDOS = 6 * 60 * 60; // 6 horas
 var UA_CHROME =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
 var UA_WHATSAPP = 'WhatsApp/2.23.20.0 A';
+var UA_DISCORD = 'Mozilla/5.0 (compatible; Discordbot/2.0; +https://discordapp.com)';
 
 var PLATAFORMAS_DOMINIOS = {
   shopee: ['shopee.com.br', 's.shopee.com.br', 'shopee.com', 'shp.ee'],
   mercado_livre: ['mercadolivre.com.br', 'mercadolibre.com', 'produto.mercadolivre.com.br', 'meli.la'],
-  amazon: ['amazon.com.br', 'amazon.com', 'amzn.to', 'a.co'],
+  amazon: [
+    'amazon.com.br',
+    'amazon.com',
+    'amzn.to',
+    'a.co',
+    'link.amazon',
+    'amzlinks.in',
+    'amzn.eu',
+    'amzn.asia',
+    'amzn.com',
+    'amzn.in',
+    'amzn.la',
+    'amzn.com.br',
+    'amazon.co.uk',
+    'amazon.de',
+    'amazon.es',
+    'amazon.fr',
+    'amazon.it',
+    'amazon.ca',
+    'amazon.co.jp',
+    'amazon.com.mx',
+  ],
   tiktok_shop: ['tiktok.com', 'vm.tiktok.com', 'vt.tiktok.com', 'shop.tiktok.com'],
   magalu: ['magazineluiza.com.br', 'magalu.com', 'm.magazineluiza.com.br', 'divulgador.magalu.com'],
   aliexpress: ['aliexpress.com', 'pt.aliexpress.com', 's.click.aliexpress.com', 'a.aliexpress.com'],
@@ -66,6 +88,8 @@ function doGet(e) {
     var uasParaTentar =
       plataformaInicial === 'shopee'
         ? [UA_WHATSAPP, UA_CHROME]
+        : plataformaInicial === 'amazon'
+        ? [UA_WHATSAPP, UA_DISCORD, UA_CHROME]
         : [UA_CHROME, UA_WHATSAPP];
 
     var resultadoBusca = null;
@@ -74,7 +98,7 @@ function doGet(e) {
     var bloqueadoPorCaptcha = false;
 
     for (var u = 0; u < uasParaTentar.length; u++) {
-      var tentativa = seguirRedirecionamentos_(url, uasParaTentar[u], 6);
+      var tentativa = seguirRedirecionamentos_(url, uasParaTentar[u], 8);
       ultimoErroHttp = tentativa.statusCode;
 
       if (tentativa.statusCode >= 200 && tentativa.statusCode < 400) {
@@ -86,23 +110,21 @@ function doGet(e) {
         );
         var ehCaptcha = html.length < 200 || detectarBloqueioCaptcha_(html);
 
-        var candidato = extrairMetadadosProduto_(
-          html,
-          plataformaFinal,
-          tentativa.urlsVisitadas
-        );
+        var candidato = ehCaptcha
+          ? null
+          : extrairMetadadosProduto_(html, plataformaFinal, tentativa.urlsVisitadas);
 
         if (candidato && candidato.titulo) {
           extraido = candidato;
           resultadoBusca = tentativa;
-          if (ehCaptcha) {
-            bloqueadoPorCaptcha = true;
-          }
-          // Se já temos título + preço (ou não é a primeira tentativa), encerra
-          if (extraido.precoAtual !== null || u === uasParaTentar.length - 1) {
+          // Se já temos título + preço + imagem (ou não é a primeira tentativa), encerra
+          if (
+            (extraido.precoAtual !== null && extraido.imagemUrl) ||
+            u === uasParaTentar.length - 1
+          ) {
             break;
           }
-          // Caso contrário (ex.: faltou preço), tenta o segundo UA se for ML ou genérico
+          // Shopee e TikTok raramente melhoram trocando de UA se já temos título
           if (plataformaFinal === 'shopee' || plataformaFinal === 'tiktok_shop') {
             break;
           }
@@ -150,7 +172,9 @@ function doGet(e) {
     }
 
     var jsonStr = JSON.stringify(extraido);
-    cache.put(cacheKey, jsonStr, CACHE_EXPIRACAO_SEGUNDOS);
+    if (extraido.precoAtual !== null && extraido.imagemUrl) {
+      cache.put(cacheKey, jsonStr, CACHE_EXPIRACAO_SEGUNDOS);
+    }
     return ContentService.createTextOutput(jsonStr).setMimeType(ContentService.MimeType.JSON);
   } catch (err) {
     return responderJson({
@@ -199,11 +223,21 @@ function seguirRedirecionamentos_(urlInicial, userAgent, maxHops) {
       }
     }
 
+    var htmlResp = resp.getContentText('UTF-8') || '';
+    if (status >= 200 && status < 300 && htmlResp.length < 4000) {
+      var destinoIntersticial = extrairRedirecionamentoHtml_(htmlResp, atual);
+      if (destinoIntersticial && urlsVisitadas.indexOf(destinoIntersticial) === -1) {
+        urlsVisitadas.push(destinoIntersticial);
+        atual = destinoIntersticial;
+        continue;
+      }
+    }
+
     return {
       statusCode: status,
       urlFinal: atual,
       urlsVisitadas: urlsVisitadas,
-      html: resp.getContentText('UTF-8') || '',
+      html: htmlResp,
     };
   }
 
@@ -273,6 +307,38 @@ function responderJson(obj) {
   );
 }
 
+function extrairRedirecionamentoHtml_(html, baseUrl) {
+  if (!html) return '';
+  var limpo = String(html).replace(/&amp;/g, '&');
+
+  // Ex.: amzlinks.in / link.amazon (<base href="...&btn_url=https%3A%2F%2Fwww.amazon.com.br...">)
+  var btnUrlMatch = limpo.match(/[?&]btn_url=([^&"'>\s]+)/i);
+  if (btnUrlMatch && btnUrlMatch[1]) {
+    try {
+      var decBtn = decodeURIComponent(btnUrlMatch[1]).trim();
+      if (/^https?:\/\//i.test(decBtn)) return decBtn;
+    } catch (e) {}
+  }
+
+  // Ex.: Redirecting to <a href="https://www.amazon.com.br/...">
+  var redirLinkMatch = limpo.match(/Redirecting\s+to\s*<a[^>]*href=["']([^"']+)["']/i);
+  if (redirLinkMatch && redirLinkMatch[1]) {
+    var linkRes = resolverUrlRelativa_(baseUrl, redirLinkMatch[1].trim());
+    if (/^https?:\/\//i.test(linkRes)) return linkRes;
+  }
+
+  // Ex.: <meta http-equiv="refresh" content="0;url=https://...">
+  var metaRefreshMatch = limpo.match(
+    /<meta[^>]*http-equiv=["']?refresh["']?[^>]*content=["'][^"']*?url=([^"'\s>]+)/i
+  );
+  if (metaRefreshMatch && metaRefreshMatch[1]) {
+    var metaRes = resolverUrlRelativa_(baseUrl, metaRefreshMatch[1].trim());
+    if (/^https?:\/\//i.test(metaRes)) return metaRes;
+  }
+
+  return '';
+}
+
 function gerarChaveCache_(url) {
   var digest = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, url);
   var hex = digest
@@ -281,7 +347,7 @@ function gerarChaveCache_(url) {
       return ('0' + v.toString(16)).slice(-2);
     })
     .join('');
-  return 'prod_v3_' + hex;
+  return 'prod_v4_' + hex;
 }
 
 function extrairHostname_(url) {
@@ -321,13 +387,18 @@ function detectarPlataformaFinal_(urlsVisitadas, html, fallback) {
 }
 
 function detectarBloqueioCaptcha_(html) {
-  var amostra = html.slice(0, 12000).toLowerCase();
+  var amostra = html.slice(0, 14000).toLowerCase();
   var possuiProduto =
-    amostra.indexOf('application/ld+json') !== -1 || amostra.indexOf('og:title') !== -1;
+    amostra.indexOf('application/ld+json') !== -1 ||
+    amostra.indexOf('og:title') !== -1 ||
+    amostra.indexOf('id="producttitle"') !== -1;
   if (possuiProduto) return false;
 
   var sinais = [
     'captcha',
+    'validatecaptcha',
+    'opfcaptcha',
+    'digite os caracteres',
     'cf-challenge',
     'robot check',
     'are you a robot',
@@ -381,6 +452,19 @@ function extrairMetadadosProduto_(html, plataforma, urlsVisitadas) {
     }
     if (ml.moeda) moeda = ml.moeda;
     if (ml.imagemUrl) imagemUrl = ml.imagemUrl;
+  }
+
+  if (plataforma === 'amazon') {
+    var amz = extrairDadosAmazon_(html);
+    if (amz.titulo) titulo = amz.titulo;
+    if (amz.imagemUrl) imagemUrl = amz.imagemUrl;
+    if (amz.precoAtual !== null) {
+      precoAtual = amz.precoAtual;
+      confiancaPreco = 'alta';
+    }
+    if (precoAtual !== null && amz.precoOriginal !== null && amz.precoOriginal > precoAtual) {
+      precoOriginal = amz.precoOriginal;
+    }
   }
 
   // 1. JSON-LD (@type: Product)
@@ -500,7 +584,10 @@ function extrairMetadadosProduto_(html, plataforma, urlsVisitadas) {
       if (
         lowerTitle !== 'security check' &&
         lowerTitle !== 'tiktok shop' &&
-        lowerTitle !== 'just a moment...'
+        lowerTitle !== 'just a moment...' &&
+        lowerTitle !== 'amazon.com.br' &&
+        lowerTitle !== 'amazon.com' &&
+        lowerTitle.indexOf('algo deu errado') === -1
       ) {
         titulo = titleCandidato;
         avisos.push('Título extraído da tag <title>; verifique se precisa de ajuste.');
@@ -808,6 +895,12 @@ function extrairTituloDoSlugUrl_(url, plataforma) {
         return limparTexto_(decodeURIComponent(mShopee[1]).replace(/[-+]+/g, ' '));
       }
     }
+    if (plataforma === 'amazon') {
+      var mAmazon = semQuery.match(/amazon\.[^\/]+\/([^\/]+)\/(?:dp|gp\/product)\/[A-Z0-9]{10}/i);
+      if (mAmazon && mAmazon[1]) {
+        return limparTexto_(decodeURIComponent(mAmazon[1]).replace(/[-+]+/g, ' '));
+      }
+    }
     var partes = semQuery.split('/').filter(Boolean);
     var ultimo = partes.length > 0 ? partes[partes.length - 1] : '';
     if (ultimo && ultimo.length > 8 && !/^MLB\d+$/i.test(ultimo)) {
@@ -819,6 +912,96 @@ function extrairTituloDoSlugUrl_(url, plataforma) {
   return '';
 }
 
+function extrairDadosAmazon_(html) {
+  var res = {
+    titulo: '',
+    imagemUrl: '',
+    precoAtual: null,
+    precoOriginal: null,
+  };
+  if (!html) return res;
+
+  var productTitleMatch = html.match(/<span[^>]*id=["']productTitle["'][^>]*>([\s\S]*?)<\/span>/i);
+  if (productTitleMatch && productTitleMatch[1]) {
+    res.titulo = limparTexto_(productTitleMatch[1]);
+  }
+
+  var landingHiresMatch = html.match(
+    /<img[^>]*id=["']landingImage["'][^>]*data-old-hires=["'](https?:\/\/[^"']+)["']/i
+  );
+  var hiResJsonMatch = html.match(/"hiRes"\s*:\s*"(https?:\/\/[^"]+)"/i);
+  var largeJsonMatch = html.match(/"large"\s*:\s*"(https?:\/\/[^"]+)"/i);
+  var dynImgMatch = html.match(/data-a-dynamic-image=["']\{(?:&quot;|")(https?:\/\/[^&"']+)/i);
+  var imgAmazon =
+    (landingHiresMatch && landingHiresMatch[1]) ||
+    (hiResJsonMatch && hiResJsonMatch[1]) ||
+    (largeJsonMatch && largeJsonMatch[1]) ||
+    (dynImgMatch && dynImgMatch[1]) ||
+    '';
+  if (imgAmazon) {
+    res.imagemUrl = limparTexto_(imgAmazon);
+  }
+
+  var priceAmountMatch = html.match(/"priceAmount"\s*:\s*(\d+(?:\.\d+)?)/i);
+  var apexPayOffscreenMatch = html.match(
+    /apex-pricetopay-value[\s\S]{0,220}?<span[^>]*class=["']a-offscreen["'][^>]*>\s*R\$\s*([^<]+)<\/span>/i
+  );
+  var apexLabelMatch = html.match(
+    /id=["']apex-pricetopay-accessibility-label["'][^>]*>\s*R\$\s*([\d.,]+)/i
+  );
+  var wholeFracMatch = html.match(
+    /priceToPay[\s\S]{0,300}?a-price-whole["'][^>]*>([\d.]+)[\s\S]{0,100}?a-price-fraction["'][^>]*>(\d{1,2})/i
+  );
+  var legacyPriceMatch = html.match(
+    /id=["']priceblock_(?:dealprice|ourprice|saleprice)["'][^>]*>\s*R\$\s*([\d.,]+)/i
+  );
+
+  var candidatoAtual = null;
+  if (priceAmountMatch && priceAmountMatch[1]) {
+    candidatoAtual = normalizarNumeroPreco_(priceAmountMatch[1]);
+  }
+  if (candidatoAtual === null && apexPayOffscreenMatch && apexPayOffscreenMatch[1]) {
+    candidatoAtual = normalizarNumeroPreco_(apexPayOffscreenMatch[1]);
+  }
+  if (candidatoAtual === null && apexLabelMatch && apexLabelMatch[1]) {
+    candidatoAtual = normalizarNumeroPreco_(apexLabelMatch[1]);
+  }
+  if (candidatoAtual === null && wholeFracMatch && wholeFracMatch[1] && wholeFracMatch[2]) {
+    candidatoAtual = normalizarNumeroPreco_(
+      wholeFracMatch[1].replace(/\./g, '') + ',' + wholeFracMatch[2]
+    );
+  }
+  if (candidatoAtual === null && legacyPriceMatch && legacyPriceMatch[1]) {
+    candidatoAtual = normalizarNumeroPreco_(legacyPriceMatch[1]);
+  }
+  res.precoAtual = candidatoAtual;
+
+  var basisLabelMatch = html.match(
+    /apex-basisprice-offscreen-label["'][^>]*>\s*(?:De:?\s*)?R\$\s*([\d.,]+)/i
+  );
+  var basisOffscreenMatch = html.match(
+    /class=["'][^"']*basisPrice[^"']*["'][\s\S]{0,240}?<span[^>]*class=["']a-offscreen["'][^>]*>\s*R\$\s*([\d.,]+)/i
+  );
+  var pqvListPriceMatch = html.match(
+    /id=["']pqv-price-list-price["'][\s\S]{0,180}?R\$\s*([\d.,]+)/i
+  );
+  var candidatoOrig = null;
+  if (basisLabelMatch && basisLabelMatch[1]) {
+    candidatoOrig = normalizarNumeroPreco_(basisLabelMatch[1]);
+  }
+  if (candidatoOrig === null && basisOffscreenMatch && basisOffscreenMatch[1]) {
+    candidatoOrig = normalizarNumeroPreco_(basisOffscreenMatch[1]);
+  }
+  if (candidatoOrig === null && pqvListPriceMatch && pqvListPriceMatch[1]) {
+    candidatoOrig = normalizarNumeroPreco_(pqvListPriceMatch[1]);
+  }
+  if (res.precoAtual !== null && candidatoOrig !== null && candidatoOrig > res.precoAtual) {
+    res.precoOriginal = candidatoOrig;
+  }
+
+  return res;
+}
+
 function limparTituloMarketplace_(titulo, plataforma) {
   if (!titulo) return '';
   var t = String(titulo).trim();
@@ -828,7 +1011,10 @@ function limparTituloMarketplace_(titulo, plataforma) {
   } else if (plataforma === 'mercado_livre') {
     t = t.replace(/\s*\|\s*Mercado\s*Livre(?:\s+Brasil)?\s*$/i, '');
   } else if (plataforma === 'amazon') {
-    t = t.replace(/\s*:\s*Amazon\.com(?:\.br)?\s*$/i, '').replace(/\s*\|\s*Amazon(?:\.com\.br)?\s*$/i, '');
+    t = t
+      .replace(/^Oferta(?:\s+do\s+dia)?\s*:\s*/i, '')
+      .replace(/\s*:\s*Amazon\.com(?:\.br)?\s*$/i, '')
+      .replace(/\s*\|\s*Amazon(?:\.com\.br)?\s*$/i, '');
   } else if (plataforma === 'magalu') {
     t = t.replace(/\s*[-|]\s*Magazine\s*Luiza\s*$/i, '').replace(/\s*\|\s*Magalu\s*$/i, '');
   } else if (plataforma === 'kabum') {
@@ -968,18 +1154,69 @@ function extrairLinkRel_(html, relValue) {
   return m && m[1] ? m[1].trim() : '';
 }
 
+var ENTIDADES_HTML_MAP_ = {
+  amp: '&',
+  quot: '"',
+  apos: "'",
+  lt: '<',
+  gt: '>',
+  nbsp: ' ',
+  ndash: '–',
+  mdash: '—',
+  deg: '°',
+  ordm: 'º',
+  ordf: 'ª',
+  aacute: 'á',
+  agrave: 'à',
+  acirc: 'â',
+  atilde: 'ã',
+  auml: 'ä',
+  eacute: 'é',
+  egrave: 'è',
+  ecirc: 'ê',
+  euml: 'ë',
+  iacute: 'í',
+  igrave: 'ì',
+  icirc: 'î',
+  iuml: 'ï',
+  oacute: 'ó',
+  ograve: 'ò',
+  ocirc: 'ô',
+  otilde: 'õ',
+  ouml: 'ö',
+  uacute: 'ú',
+  ugrave: 'ù',
+  ucirc: 'û',
+  uuml: 'ü',
+  ccedil: 'ç',
+  ntilde: 'ñ',
+  Aacute: 'Á',
+  Agrave: 'À',
+  Acirc: 'Â',
+  Atilde: 'Ã',
+  Eacute: 'É',
+  Ecirc: 'Ê',
+  Iacute: 'Í',
+  Oacute: 'Ó',
+  Ocirc: 'Ô',
+  Otilde: 'Õ',
+  Uacute: 'Ú',
+  Uuml: 'Ü',
+  Ccedil: 'Ç',
+};
+
 function limparTexto_(texto) {
   if (!texto) return '';
-  return texto
+  return String(texto)
     .replace(/<[^>]+>/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;|&apos;/g, "'")
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&nbsp;/g, ' ')
     .replace(/&#(\d+);/g, function (_, code) {
       return String.fromCharCode(Number(code));
+    })
+    .replace(/&#x([0-9a-f]+);/gi, function (_, hex) {
+      return String.fromCharCode(parseInt(hex, 16));
+    })
+    .replace(/&([a-zA-Z]+);/g, function (full, nome) {
+      return ENTIDADES_HTML_MAP_[nome] || full;
     })
     .replace(/\s+/g, ' ')
     .trim();

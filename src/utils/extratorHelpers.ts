@@ -41,17 +41,64 @@ export function formatarPrecoParaInput(valor: number | null): string {
   return valor.toFixed(2).replace('.', ',');
 }
 
+const ENTIDADES_HTML: Record<string, string> = {
+  amp: '&',
+  quot: '"',
+  apos: "'",
+  lt: '<',
+  gt: '>',
+  nbsp: ' ',
+  ndash: '–',
+  mdash: '—',
+  deg: '°',
+  ordm: 'º',
+  ordf: 'ª',
+  aacute: 'á',
+  agrave: 'à',
+  acirc: 'â',
+  atilde: 'ã',
+  auml: 'ä',
+  eacute: 'é',
+  egrave: 'è',
+  ecirc: 'ê',
+  euml: 'ë',
+  iacute: 'í',
+  igrave: 'ì',
+  icirc: 'î',
+  iuml: 'ï',
+  oacute: 'ó',
+  ograve: 'ò',
+  ocirc: 'ô',
+  otilde: 'õ',
+  ouml: 'ö',
+  uacute: 'ú',
+  ugrave: 'ù',
+  ucirc: 'û',
+  uuml: 'ü',
+  ccedil: 'ç',
+  ntilde: 'ñ',
+  Aacute: 'Á',
+  Agrave: 'À',
+  Acirc: 'Â',
+  Atilde: 'Ã',
+  Eacute: 'É',
+  Ecirc: 'Ê',
+  Iacute: 'Í',
+  Oacute: 'Ó',
+  Ocirc: 'Ô',
+  Otilde: 'Õ',
+  Uacute: 'Ú',
+  Uuml: 'Ü',
+  Ccedil: 'Ç',
+};
+
 export function limparTextoHtml(texto: string): string {
   if (!texto) return '';
   return texto
     .replace(/<[^>]+>/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;|&apos;/g, "'")
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&nbsp;/g, ' ')
     .replace(/&#(\d+);/g, (_, code: string) => String.fromCharCode(Number(code)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, hex: string) => String.fromCharCode(parseInt(hex, 16)))
+    .replace(/&([a-zA-Z]+);/g, (full, nome: string) => ENTIDADES_HTML[nome] ?? full)
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -216,6 +263,7 @@ export function limparTituloMarketplace(titulo: string, plataforma: Plataforma):
     t = t.replace(/\s*\|\s*Mercado\s*Livre(?:\s+Brasil)?\s*$/i, '');
   } else if (plataforma === 'amazon') {
     t = t
+      .replace(/^Oferta(?:\s+do\s+dia)?\s*:\s*/i, '')
       .replace(/\s*:\s*Amazon\.com(?:\.br)?\s*$/i, '')
       .replace(/\s*\|\s*Amazon(?:\.com\.br)?\s*$/i, '');
   } else if (plataforma === 'magalu') {
@@ -266,6 +314,16 @@ export function extrairTituloDoSlugUrl(url: string, plataforma: Plataforma): str
       const mMl = pathname.match(/^\/([^/]+)\/p\/MLB\d+/i);
       if (mMl?.[1]) {
         return limparTextoHtml(decodeURIComponent(mMl[1]).replace(/[-+]+/g, ' ')).slice(
+          0,
+          PRODUTO_LIMITES.TITULO_MAX
+        );
+      }
+    }
+
+    if (plataforma === 'amazon') {
+      const mAmazon = pathname.match(/^\/([^/]+)\/(?:dp|gp\/product)\/[A-Z0-9]{10}/i);
+      if (mAmazon?.[1]) {
+        return limparTextoHtml(decodeURIComponent(mAmazon[1]).replace(/[-+]+/g, ' ')).slice(
           0,
           PRODUTO_LIMITES.TITULO_MAX
         );
@@ -417,6 +475,71 @@ export function extrairMetadadosDeHtml(
     );
     if (titleJsonMatch?.[1]) {
       titulo = limparTextoHtml(titleJsonMatch[1]);
+    }
+  }
+
+  if (plataforma === 'amazon') {
+    const productTitleMatch = html.match(/<span[^>]*id=["']productTitle["'][^>]*>([\s\S]*?)<\/span>/i);
+    if (productTitleMatch?.[1]) {
+      titulo = limparTextoHtml(productTitleMatch[1]);
+    }
+
+    const landingHiresMatch = html.match(
+      /<img[^>]*id=["']landingImage["'][^>]*data-old-hires=["'](https?:\/\/[^"']+)["']/i
+    );
+    const hiResJsonMatch = html.match(/"hiRes"\s*:\s*"(https?:\/\/[^"]+)"/i);
+    const largeJsonMatch = html.match(/"large"\s*:\s*"(https?:\/\/[^"]+)"/i);
+    const dynImgMatch = html.match(/data-a-dynamic-image=["']\{(?:&quot;|")(https?:\/\/[^&"']+)/i);
+    const imgAmazon =
+      landingHiresMatch?.[1] ||
+      hiResJsonMatch?.[1] ||
+      largeJsonMatch?.[1] ||
+      dynImgMatch?.[1] ||
+      '';
+    if (imgAmazon) {
+      imagemUrl = limparTextoHtml(imgAmazon);
+    }
+
+    const priceAmountMatch = html.match(/"priceAmount"\s*:\s*(\d+(?:\.\d+)?)/i);
+    const apexPayOffscreenMatch = html.match(
+      /apex-pricetopay-value[\s\S]{0,220}?<span[^>]*class=["']a-offscreen["'][^>]*>\s*R\$\s*([^<]+)<\/span>/i
+    );
+    const apexLabelMatch = html.match(
+      /id=["']apex-pricetopay-accessibility-label["'][^>]*>\s*R\$\s*([\d.,]+)/i
+    );
+    const wholeFracMatch = html.match(
+      /priceToPay[\s\S]{0,300}?a-price-whole["'][^>]*>([\d.]+)[\s\S]{0,100}?a-price-fraction["'][^>]*>(\d{1,2})/i
+    );
+
+    const candidatoAtual =
+      (priceAmountMatch?.[1] ? normalizarNumeroPreco(priceAmountMatch[1]) : null) ??
+      (apexPayOffscreenMatch?.[1] ? normalizarNumeroPreco(apexPayOffscreenMatch[1]) : null) ??
+      (apexLabelMatch?.[1] ? normalizarNumeroPreco(apexLabelMatch[1]) : null) ??
+      (wholeFracMatch?.[1] && wholeFracMatch?.[2]
+        ? normalizarNumeroPreco(`${wholeFracMatch[1].replace(/\./g, '')},${wholeFracMatch[2]}`)
+        : null);
+
+    if (candidatoAtual !== null) {
+      precoAtual = candidatoAtual;
+      confiancaPreco = 'alta';
+    }
+
+    const basisLabelMatch = html.match(
+      /apex-basisprice-offscreen-label["'][^>]*>\s*(?:De:?\s*)?R\$\s*([\d.,]+)/i
+    );
+    const basisOffscreenMatch = html.match(
+      /class=["'][^"']*basisPrice[^"']*["'][\s\S]{0,240}?<span[^>]*class=["']a-offscreen["'][^>]*>\s*R\$\s*([\d.,]+)/i
+    );
+    const pqvListPriceMatch = html.match(
+      /id=["']pqv-price-list-price["'][\s\S]{0,180}?R\$\s*([\d.,]+)/i
+    );
+    const candidatoOrig =
+      (basisLabelMatch?.[1] ? normalizarNumeroPreco(basisLabelMatch[1]) : null) ??
+      (basisOffscreenMatch?.[1] ? normalizarNumeroPreco(basisOffscreenMatch[1]) : null) ??
+      (pqvListPriceMatch?.[1] ? normalizarNumeroPreco(pqvListPriceMatch[1]) : null);
+
+    if (precoAtual !== null && candidatoOrig !== null && candidatoOrig > precoAtual) {
+      precoOriginal = candidatoOrig;
     }
   }
 

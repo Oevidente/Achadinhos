@@ -17,6 +17,7 @@ import {
   normalizarRespostaExtrator,
   type ExtratorResultado,
 } from '../utils/extratorHelpers';
+import { obterPlataformasVisiveis, PLATAFORMAS_CONFIG } from '../utils/plataformas';
 
 export type { ConfiancaPreco, ExtratorResultado } from '../utils/extratorHelpers';
 
@@ -28,9 +29,14 @@ export async function extrairDadosDoLink(url: string): Promise<ExtratorResultado
   }
 
   if (!isDominioPermitidoExtrator(urlLimpa)) {
-    throw new Error(
-      'Domínio fora da lista permitida. Use links de Shopee, Mercado Livre, TikTok Shop, AliExpress, Americanas ou KaBuM!.'
-    );
+    const nomesPermitidos = obterPlataformasVisiveis()
+      .filter((id) => id !== 'outra')
+      .map((id) => PLATAFORMAS_CONFIG[id].nome);
+    const listaFormatada =
+      nomesPermitidos.length > 1
+        ? `${nomesPermitidos.slice(0, -1).join(', ')} ou ${nomesPermitidos[nomesPermitidos.length - 1]}`
+        : nomesPermitidos.join('');
+    throw new Error(`Domínio fora da lista permitida. Use links de ${listaFormatada}.`);
   }
 
   const fallbackLocal = extrairMetadadosPelaUrlLocal(urlLimpa);

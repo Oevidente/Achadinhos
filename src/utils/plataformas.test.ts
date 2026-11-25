@@ -9,6 +9,11 @@ test('detectarPlataforma identifica marketplaces e subdomínios conhecidos', () 
   assert.equal(detectarPlataforma('https://mercadolibre.com/item'), 'mercado_livre');
   assert.equal(detectarPlataforma('https://www.amazon.com.br/dp/B09V3KXJPB'), 'amazon');
   assert.equal(detectarPlataforma('https://amzn.to/3XYZabc'), 'amazon');
+  assert.equal(detectarPlataforma('https://link.amazon/B0c64ySiV'), 'amazon');
+  assert.equal(detectarPlataforma('https://amzlinks.in/B0c64ySiV'), 'amazon');
+  assert.equal(detectarPlataforma('https://a.co/d/abc1234'), 'amazon');
+  assert.equal(detectarPlataforma('https://amzn.eu/d/xyz987'), 'amazon');
+  assert.equal(detectarPlataforma('https://amzn.com/dp/B09V3KXJPB'), 'amazon');
   assert.equal(detectarPlataforma('https://www.tiktok.com/@loja/video/123'), 'tiktok_shop');
   assert.equal(detectarPlataforma('https://vm.tiktok.com/ZM8abc123/'), 'tiktok_shop');
   assert.equal(detectarPlataforma('https://www.magazineluiza.com.br/produto/p/123'), 'magalu');
