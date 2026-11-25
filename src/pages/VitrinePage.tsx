@@ -22,6 +22,7 @@ import {
 import { BrandLogo } from '../components/BrandLogo';
 import { CardProduto } from '../components/CardProduto';
 import { PWAInstallButton } from '../components/PWAInstallButton';
+import { WhatsAppBanner } from '../components/WhatsAppBanner';
 import { listarProdutosAtivosPaginado } from '../services/produtosService';
 import type { CategoriaProduto, Plataforma, Produto } from '../types/produto';
 import { CATEGORIAS_CONFIG } from '../utils/categorias';
@@ -354,6 +355,9 @@ export function VitrinePage({ onNavigate }: VitrinePageProps) {
             </div>
           </div>
         </section>
+
+        {/* Banner do grupo de ofertas do WhatsApp */}
+        <WhatsAppBanner />
 
         {/* Faixa de Categorias reais */}
         <section aria-label="Categorias de produtos" className="space-y-3">

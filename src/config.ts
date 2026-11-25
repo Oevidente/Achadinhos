@@ -46,4 +46,5 @@ export const APP_CONFIG = {
   nome: 'Achadinhos do Deco',
   limitePadraoProdutos: 100,
   extratorTimeoutMs: 15000,
+  whatsappGrupoUrl: 'https://chat.whatsapp.com/G425LTQIWHBJehmXHrBvWf',
 } as const;

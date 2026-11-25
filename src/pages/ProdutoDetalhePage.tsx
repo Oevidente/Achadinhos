@@ -11,6 +11,7 @@ import {
   Ticket,
 } from 'lucide-react';
 import { BrandLogo } from '../components/BrandLogo';
+import { WhatsAppBanner } from '../components/WhatsAppBanner';
 import { buscarProduto, registrarCliqueProduto } from '../services/produtosService';
 import type { Plataforma, Produto } from '../types/produto';
 import {
@@ -433,6 +434,8 @@ export function ProdutoDetalhePage({
             </div>
           </article>
         )}
+
+        <WhatsAppBanner className="mt-6" />
       </main>
 
       <footer className="border-t border-[#1E2A20] bg-[#0B100C]">
