@@ -66,10 +66,9 @@ export const PLATAFORMAS_CONFIG: Record<Plataforma, ConfiguracaoPlataforma> = {
 
 /**
  * Plataformas temporariamente ocultas na vitrine e seletores do painel.
- * Para reativar Amazon ou Magalu futuramente, basta remover o ID desta lista.
+ * Para reativar a Magalu futuramente, basta remover o ID desta lista.
  */
 export const PLATAFORMAS_OCULTAS: ReadonlySet<Plataforma> = new Set<Plataforma>([
-  'amazon',
   'magalu',
 ]);
 

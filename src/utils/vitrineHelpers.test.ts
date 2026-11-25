@@ -103,7 +103,7 @@ test('filtrarEOrdenarVitrine ordena por menor preço, maior desconto e mais rece
   );
 });
 
-test('obterPlataformasFiltro exibe principais ativas, oculta Amazon/Magalu e adiciona extras presentes nos ativos', () => {
+test('obterPlataformasFiltro exibe principais ativas (incluindo Amazon), oculta Magalu e adiciona extras presentes nos ativos', () => {
   const lista = [
     baseProduto({ id: '1', plataforma: 'kabum', status: 'ativo' }),
     baseProduto({ id: '2', plataforma: 'aliexpress', status: 'inativo' }),
@@ -114,14 +114,14 @@ test('obterPlataformasFiltro exibe principais ativas, oculta Amazon/Magalu e adi
   const chips = obterPlataformasFiltro(lista);
   assert.equal(chips.includes('shopee'), true);
   assert.equal(chips.includes('mercado_livre'), true);
+  assert.equal(chips.includes('amazon'), true);
   assert.equal(chips.includes('tiktok_shop'), true);
-  assert.equal(chips.includes('amazon'), false);
   assert.equal(chips.includes('magalu'), false);
   assert.equal(chips.includes('kabum'), true);
   assert.equal(chips.includes('aliexpress'), false);
 });
 
-test('filtrarEOrdenarVitrine oculta produtos das lojas temporariamente ocultas (Amazon e Magalu)', () => {
+test('filtrarEOrdenarVitrine exibe Amazon e oculta apenas lojas temporariamente ocultas (Magalu)', () => {
   const lista = [
     baseProduto({ id: 's1', plataforma: 'shopee', status: 'ativo' }),
     baseProduto({ id: 'a1', plataforma: 'amazon', status: 'ativo' }),
@@ -136,7 +136,7 @@ test('filtrarEOrdenarVitrine oculta produtos das lojas temporariamente ocultas (
 
   assert.deepEqual(
     visiveis.map((p) => p.id),
-    ['s1']
+    ['s1', 'a1']
   );
 });
 

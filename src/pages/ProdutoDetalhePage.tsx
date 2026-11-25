@@ -453,9 +453,13 @@ export function ProdutoDetalhePage({
               <span>
                 Afiliado cadastrado da{' '}
                 <strong className="font-semibold text-white">Shopee</strong>,{' '}
-                <strong className="font-semibold text-white">Mercado Livre</strong> e{' '}
+                <strong className="font-semibold text-white">Mercado Livre</strong>,{' '}
+                <strong className="font-semibold text-white">Amazon</strong> e{' '}
                 <strong className="font-semibold text-white">TikTok Shop</strong>.
               </span>
+            </p>
+            <p className="text-xs text-slate-300 leading-relaxed">
+              Como participante do Programa de Associados da Amazon, sou remunerado pelas compras qualificadas efetuadas.
             </p>
           </div>
           <a
