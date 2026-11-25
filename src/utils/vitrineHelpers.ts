@@ -10,16 +10,20 @@ import {
   produtoEstaExpirado,
 } from './adminHelpers';
 import { obterCategoriaEfetiva, obterNomeCategoria } from './categorias';
+import { isPlataformaOculta } from './plataformas';
 
 export type OrdenacaoVitrine = 'mais_recentes' | 'menor_preco' | 'maior_desconto';
 
-export const PLATAFORMAS_PRINCIPAIS_VITRINE: readonly Plataforma[] = [
+const PLATAFORMAS_BASE_VITRINE: readonly Plataforma[] = [
   'shopee',
   'mercado_livre',
   'amazon',
   'tiktok_shop',
   'magalu',
 ];
+
+export const PLATAFORMAS_PRINCIPAIS_VITRINE: readonly Plataforma[] =
+  PLATAFORMAS_BASE_VITRINE.filter((id) => !isPlataformaOculta(id));
 
 export interface FiltrosVitrine {
   busca: string;
@@ -39,6 +43,7 @@ export function obterPlataformasFiltro(
     if (
       produto.status === 'ativo' &&
       !produtoEstaExpirado(produto, referencia) &&
+      !isPlataformaOculta(produto.plataforma) &&
       !jaIncluidas.has(produto.plataforma)
     ) {
       jaIncluidas.add(produto.plataforma);
@@ -64,6 +69,7 @@ export function filtrarEOrdenarVitrine(
   const filtrados = produtos.filter((produto) => {
     if (produto.status !== 'ativo') return false;
     if (produtoEstaExpirado(produto, referencia)) return false;
+    if (isPlataformaOculta(produto.plataforma)) return false;
     if (filtros.plataforma !== 'todas' && produto.plataforma !== filtros.plataforma) {
       return false;
     }

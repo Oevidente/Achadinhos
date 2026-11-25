@@ -64,6 +64,25 @@ export const PLATAFORMAS_CONFIG: Record<Plataforma, ConfiguracaoPlataforma> = {
   },
 };
 
+/**
+ * Plataformas temporariamente ocultas na vitrine e seletores do painel.
+ * Para reativar Amazon ou Magalu futuramente, basta remover o ID desta lista.
+ */
+export const PLATAFORMAS_OCULTAS: ReadonlySet<Plataforma> = new Set<Plataforma>([
+  'amazon',
+  'magalu',
+]);
+
+export function isPlataformaOculta(plataforma: Plataforma): boolean {
+  return PLATAFORMAS_OCULTAS.has(plataforma);
+}
+
+export function obterPlataformasVisiveis(): Plataforma[] {
+  return (Object.keys(PLATAFORMAS_CONFIG) as Plataforma[]).filter(
+    (id) => !isPlataformaOculta(id)
+  );
+}
+
 function extrairHostname(urlBruta: string): string | null {
   const limpa = urlBruta.trim();
   if (!limpa) return null;

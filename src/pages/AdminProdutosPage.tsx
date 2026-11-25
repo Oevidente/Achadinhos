@@ -23,7 +23,6 @@ import {
 } from '../services/produtosService';
 import {
   CATEGORIAS_PRODUTO,
-  PLATAFORMAS,
   STATUS_PRODUTO,
   type CategoriaProduto,
   type Plataforma,
@@ -43,7 +42,7 @@ import {
   obterCategoriaEfetiva,
   obterNomeCategoria,
 } from '../utils/categorias';
-import { PLATAFORMAS_CONFIG } from '../utils/plataformas';
+import { obterPlataformasVisiveis, PLATAFORMAS_CONFIG } from '../utils/plataformas';
 
 interface AdminProdutosPageProps {
   onNavigate: (path: string) => void;
@@ -504,7 +503,7 @@ export function AdminProdutosPage({ onNavigate, onToast }: AdminProdutosPageProp
             className="w-full rounded-lg border border-[#1E2A20] bg-[#070A07] px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-[#22C55E]"
           >
             <option value="todas">Todas as lojas</option>
-            {PLATAFORMAS.map((platId) => (
+            {obterPlataformasVisiveis().map((platId) => (
               <option key={platId} value={platId}>
                 {PLATAFORMAS_CONFIG[platId].nome}
               </option>

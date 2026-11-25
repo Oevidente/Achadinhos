@@ -29,7 +29,7 @@ export async function extrairDadosDoLink(url: string): Promise<ExtratorResultado
 
   if (!isDominioPermitidoExtrator(urlLimpa)) {
     throw new Error(
-      'Domínio fora da lista permitida. Use links de Shopee, Mercado Livre, Amazon, TikTok Shop, Magalu, AliExpress, Americanas ou KaBuM!.'
+      'Domínio fora da lista permitida. Use links de Shopee, Mercado Livre, TikTok Shop, AliExpress, Americanas ou KaBuM!.'
     );
   }
 

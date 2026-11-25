@@ -9,7 +9,6 @@ import {
 } from '../services/produtosService';
 import {
   CATEGORIAS_PRODUTO,
-  PLATAFORMAS,
   STATUS_PRODUTO,
   type CategoriaProduto,
   type OrigemDadosProduto,
@@ -25,7 +24,12 @@ import {
 } from '../utils/adminHelpers';
 import { CATEGORIAS_CONFIG, sugerirCategoriaProduto } from '../utils/categorias';
 import { formatarPrecoParaInput } from '../utils/extratorHelpers';
-import { detectarPlataforma, PLATAFORMAS_CONFIG } from '../utils/plataformas';
+import {
+  detectarPlataforma,
+  isPlataformaOculta,
+  obterPlataformasVisiveis,
+  PLATAFORMAS_CONFIG,
+} from '../utils/plataformas';
 
 interface AdminProdutoFormPageProps {
   produtoId?: string;
@@ -127,7 +131,10 @@ export function AdminProdutoFormPage({
   }, [produtoId]);
 
   const handleLinkOriginalChange = (novoLink: string) => {
-    const plataformaAuto = detectarPlataforma(novoLink);
+    const plataformaDetectada = detectarPlataforma(novoLink);
+    const plataformaAuto = isPlataformaOculta(plataformaDetectada)
+      ? 'outra'
+      : plataformaDetectada;
     setForm((prev) => ({
       ...prev,
       linkOriginal: novoLink,
@@ -189,7 +196,9 @@ export function AdminProdutoFormPage({
 
         return {
           ...prev,
-          plataforma: extraido.plataforma,
+          plataforma: isPlataformaOculta(extraido.plataforma)
+            ? 'outra'
+            : extraido.plataforma,
           categoria: categoriaSugerida,
           titulo: tituloFinal,
           descricao: descFinal,
@@ -408,11 +417,16 @@ export function AdminProdutoFormPage({
                     false
                   )}`}
                 >
-                  {PLATAFORMAS.map((platId) => (
+                  {obterPlataformasVisiveis().map((platId) => (
                     <option key={platId} value={platId}>
                       {PLATAFORMAS_CONFIG[platId].nome}
                     </option>
                   ))}
+                  {modoEdicao && isPlataformaOculta(form.plataforma) && (
+                    <option value={form.plataforma}>
+                      {PLATAFORMAS_CONFIG[form.plataforma].nome} (oculta)
+                    </option>
+                  )}
                 </select>
               </div>
 

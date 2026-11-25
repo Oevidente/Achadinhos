@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   ArrowLeft,
   ArrowRight,
+  BadgeCheck,
   Check,
   Clock,
   Copy,
@@ -19,7 +20,7 @@ import {
   produtoEstaExpirado,
 } from '../utils/adminHelpers';
 import { obterCategoriaEfetiva, obterNomeCategoria } from '../utils/categorias';
-import { PLATAFORMAS_CONFIG } from '../utils/plataformas';
+import { isPlataformaOculta, PLATAFORMAS_CONFIG } from '../utils/plataformas';
 import { comBasePath } from '../utils/router';
 import { obterUrlDestinoOferta } from '../utils/vitrineHelpers';
 
@@ -165,7 +166,10 @@ export function ProdutoDetalhePage({
   };
 
   const indisponivel =
-    produto !== null && (produto.status !== 'ativo' || produtoEstaExpirado(produto));
+    produto !== null &&
+    (produto.status !== 'ativo' ||
+      produtoEstaExpirado(produto) ||
+      isPlataformaOculta(produto.plataforma));
 
   const plat = produto
     ? PLATAFORMAS_CONFIG[produto.plataforma] ?? PLATAFORMAS_CONFIG.outra
@@ -433,10 +437,24 @@ export function ProdutoDetalhePage({
 
       <footer className="border-t border-[#1E2A20] bg-[#0B100C]">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <p className="text-xs text-slate-400 leading-relaxed max-w-2xl">
-            Os preços e a disponibilidade podem mudar a qualquer momento nos sites das lojas.
-            Este site pode receber comissão por compras feitas pelos links.
-          </p>
+          <div className="space-y-1.5 max-w-2xl">
+            <p className="text-xs text-slate-400 leading-relaxed">
+              Os preços e a disponibilidade podem mudar a qualquer momento nos sites das lojas.
+              Este site pode receber comissão por compras feitas pelos links.
+            </p>
+            <p className="inline-flex items-start sm:items-center gap-1.5 text-xs text-slate-300 leading-relaxed">
+              <BadgeCheck
+                className="w-4 h-4 text-[#22C55E] shrink-0 mt-0.5 sm:mt-0"
+                aria-hidden="true"
+              />
+              <span>
+                Afiliado cadastrado da{' '}
+                <strong className="font-semibold text-white">Shopee</strong>,{' '}
+                <strong className="font-semibold text-white">Mercado Livre</strong> e{' '}
+                <strong className="font-semibold text-white">TikTok Shop</strong>.
+              </span>
+            </p>
+          </div>
           <a
             href={comBasePath('/admin', import.meta.env.BASE_URL)}
             onClick={(e) => {

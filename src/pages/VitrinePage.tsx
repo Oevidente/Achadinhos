@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { DocumentData, QueryDocumentSnapshot } from 'firebase/firestore';
 import {
   ArrowRight,
+  BadgeCheck,
   CheckCircle2,
   Dumbbell,
   Gamepad2,
@@ -30,6 +31,7 @@ import {
   filtrarEOrdenarVitrine,
   obterCategoriasVitrine,
   obterPlataformasFiltro,
+  PLATAFORMAS_PRINCIPAIS_VITRINE,
   type OrdenacaoVitrine,
 } from '../utils/vitrineHelpers';
 
@@ -611,8 +613,9 @@ export function VitrinePage({ onNavigate }: VitrinePageProps) {
                 As melhores lojas
               </h3>
               <p className="text-xs sm:text-sm text-slate-400 leading-relaxed">
-                Produtos selecionados de Shopee, Mercado Livre, Amazon, TikTok Shop, Magalu e
-                outras plataformas.
+                Produtos selecionados de{' '}
+                {PLATAFORMAS_PRINCIPAIS_VITRINE.map((id) => PLATAFORMAS_CONFIG[id].nome).join(', ')}{' '}
+                e outras plataformas.
               </p>
             </div>
           </div>
@@ -624,9 +627,21 @@ export function VitrinePage({ onNavigate }: VitrinePageProps) {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-7 flex flex-col sm:flex-row sm:items-center justify-between gap-6">
           <div className="space-y-2.5">
             <BrandLogo tamanho="sm" />
-            <p className="text-xs text-slate-400 leading-relaxed max-w-lg">
+            <p className="text-xs text-slate-400 leading-relaxed max-w-xl">
               Os preços e a disponibilidade podem mudar a qualquer momento nos sites das lojas.
               Este site pode receber comissão por compras feitas pelos links.
+            </p>
+            <p className="inline-flex items-start sm:items-center gap-1.5 text-xs text-slate-300 leading-relaxed">
+              <BadgeCheck
+                className="w-4 h-4 text-[#22C55E] shrink-0 mt-0.5 sm:mt-0"
+                aria-hidden="true"
+              />
+              <span>
+                Afiliado cadastrado da{' '}
+                <strong className="font-semibold text-white">Shopee</strong>,{' '}
+                <strong className="font-semibold text-white">Mercado Livre</strong> e{' '}
+                <strong className="font-semibold text-white">TikTok Shop</strong>.
+              </span>
             </p>
           </div>
 
