@@ -43,6 +43,7 @@ import {
   obterCategoriaEfetiva,
   obterNomeCategoria,
 } from '../utils/categorias';
+import { avaliarApeloProduto } from '../utils/destaquesInteligentes';
 import { obterPlataformasVisiveis, PLATAFORMAS_CONFIG } from '../utils/plataformas';
 
 interface AdminProdutosPageProps {
@@ -670,6 +671,9 @@ export function AdminProdutosPage({ onNavigate, onToast }: AdminProdutosPageProp
                   const proximoStatus: StatusProduto =
                     produto.status === 'ativo' ? 'inativo' : 'ativo';
                   const validadeFmt = formatarDataIsoBr(produto.validoAte);
+                  const avaliacaoApelo = !produto.destaque
+                    ? avaliarApeloProduto(produto)
+                    : null;
 
                   return (
                     <tr
@@ -687,11 +691,18 @@ export function AdminProdutosPage({ onNavigate, onToast }: AdminProdutosPageProp
                               {produto.titulo}
                             </p>
                             <div className="flex flex-wrap items-center gap-2 text-[11px]">
-                              {produto.destaque && (
+                              {produto.destaque ? (
                                 <span className="text-[#22C55E] font-medium">
-                                  Destaque
+                                  Destaque manual
                                 </span>
-                              )}
+                              ) : avaliacaoApelo?.ehDestaqueInteligente ? (
+                                <span
+                                  title={`Apelo ${avaliacaoApelo.score} pts: ${avaliacaoApelo.motivos.join(', ')}`}
+                                  className="text-[#4ADE80] font-medium"
+                                >
+                                  Destaque auto · {avaliacaoApelo.motivoPrincipal ?? 'Alto apelo'}
+                                </span>
+                              ) : null}
                               {obterNomeCategoria(obterCategoriaEfetiva(produto)) && (
                                 <span className="px-1.5 py-0.5 rounded bg-[#141D16] text-slate-300 border border-[#1E2A20]">
                                   {obterNomeCategoria(obterCategoriaEfetiva(produto))}
@@ -859,6 +870,9 @@ export function AdminProdutosPage({ onNavigate, onToast }: AdminProdutosPageProp
                 loteEmExecucao;
               const proximoStatus: StatusProduto =
                 produto.status === 'ativo' ? 'inativo' : 'ativo';
+              const avaliacaoApelo = !produto.destaque
+                ? avaliarApeloProduto(produto)
+                : null;
 
               return (
                 <article
@@ -884,6 +898,11 @@ export function AdminProdutosPage({ onNavigate, onToast }: AdminProdutosPageProp
                         <span className={`font-semibold ${statusInfo.classe}`}>
                           {statusInfo.texto}
                         </span>
+                        {avaliacaoApelo?.ehDestaqueInteligente && (
+                          <span className="text-[#4ADE80] font-medium text-[11px]">
+                            · Auto: {avaliacaoApelo.motivoPrincipal ?? 'Alto apelo'}
+                          </span>
+                        )}
                         <span className="text-slate-500">·</span>
                         <span className="inline-flex items-center gap-1 text-slate-300 tabular-nums">
                           <MousePointerClick className="w-3.5 h-3.5 text-slate-400" />

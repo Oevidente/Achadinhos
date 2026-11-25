@@ -26,6 +26,7 @@ import { WhatsAppBanner } from '../components/WhatsAppBanner';
 import { listarProdutosAtivosPaginado } from '../services/produtosService';
 import type { CategoriaProduto, Plataforma, Produto } from '../types/produto';
 import { CATEGORIAS_CONFIG } from '../utils/categorias';
+import { selecionarDestaquesVitrine } from '../utils/destaquesInteligentes';
 import { PLATAFORMAS_CONFIG } from '../utils/plataformas';
 import { comBasePath } from '../utils/router';
 import {
@@ -142,15 +143,18 @@ export function VitrinePage({ onNavigate }: VitrinePageProps) {
     plataformaSelecionada !== 'todas' ||
     categoriaSelecionada !== 'todas';
 
-  const destaques = useMemo(
-    () => (temFiltroAtivo ? [] : produtosVisiveis.filter((produto) => produto.destaque)),
+  const {
+    destaques,
+    demaisOfertas,
+    avaliacoesPorId,
+    idsDestaqueInteligente,
+  } = useMemo(
+    () =>
+      selecionarDestaquesVitrine(produtosVisiveis, {
+        desabilitarDestaques: temFiltroAtivo,
+      }),
     [produtosVisiveis, temFiltroAtivo]
   );
-
-  const demaisOfertas = useMemo(() => {
-    if (temFiltroAtivo || destaques.length === 0) return produtosVisiveis;
-    return produtosVisiveis.filter((produto) => !produto.destaque);
-  }, [produtosVisiveis, temFiltroAtivo, destaques.length]);
 
   const tituloSecaoOfertas = useMemo(() => {
     if (categoriaSelecionada !== 'todas') {
@@ -166,7 +170,7 @@ export function VitrinePage({ onNavigate }: VitrinePageProps) {
   }, [categoriaSelecionada, plataformaSelecionada, busca, destaques.length]);
 
   const rolarParaSecao = (id: string) => {
-    const el = document.getElementById(id);
+    const el = document.getElementById(id) ?? document.getElementById('secao-destaques');
     if (el) {
       el.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
@@ -514,6 +518,11 @@ export function VitrinePage({ onNavigate }: VitrinePageProps) {
                     <CardProduto
                       key={`destaque-${produto.id}`}
                       produto={produto}
+                      destaqueInteligenteMotivo={
+                        idsDestaqueInteligente.has(produto.id)
+                          ? avaliacoesPorId.get(produto.id)?.motivoPrincipal ?? 'Em alta'
+                          : null
+                      }
                       onAbrirDetalhes={(id) => onNavigate(`/p/${id}`)}
                     />
                   ))}
@@ -521,7 +530,7 @@ export function VitrinePage({ onNavigate }: VitrinePageProps) {
               </section>
             )}
 
-            {(demaisOfertas.length > 0 || temMais || temFiltroAtivo) && (
+            {(demaisOfertas.length > 0 || temFiltroAtivo) && (
               <section
                 id="secao-ofertas"
                 aria-labelledby="titulo-todas-ofertas"
@@ -569,21 +578,21 @@ export function VitrinePage({ onNavigate }: VitrinePageProps) {
                     ))}
                   </div>
                 )}
-
-                {temMais && (
-                  <div className="pt-4 flex justify-center">
-                    <button
-                      type="button"
-                      onClick={() => void carregarMaisOfertas()}
-                      disabled={carregandoMais}
-                      className="inline-flex items-center justify-center gap-2 min-h-[44px] px-6 py-2.5 rounded-lg border border-[#22C55E]/40 bg-[#0F1410] hover:bg-[#172319] text-sm font-semibold text-[#22C55E] transition-colors cursor-pointer disabled:opacity-50"
-                    >
-                      {carregandoMais && <Loader2 className="w-4 h-4 animate-spin" />}
-                      <span>{carregandoMais ? 'Carregando...' : 'Carregar mais'}</span>
-                    </button>
-                  </div>
-                )}
               </section>
+            )}
+
+            {temMais && (
+              <div className="pt-2 flex justify-center">
+                <button
+                  type="button"
+                  onClick={() => void carregarMaisOfertas()}
+                  disabled={carregandoMais}
+                  className="inline-flex items-center justify-center gap-2 min-h-[44px] px-6 py-2.5 rounded-lg border border-[#22C55E]/40 bg-[#0F1410] hover:bg-[#172319] text-sm font-semibold text-[#22C55E] transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  {carregandoMais && <Loader2 className="w-4 h-4 animate-spin" />}
+                  <span>{carregandoMais ? 'Carregando...' : 'Carregar mais'}</span>
+                </button>
+              </div>
             )}
           </div>
         )}

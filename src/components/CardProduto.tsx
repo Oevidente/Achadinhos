@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ArrowRight, Check, Copy, Package, Share2, Star, Ticket } from 'lucide-react';
+import { ArrowRight, Check, Copy, Flame, Package, Share2, Star, Ticket } from 'lucide-react';
 import { registrarCliqueProduto } from '../services/produtosService';
 import type { CategoriaProduto, Plataforma, Produto } from '../types/produto';
 import {
@@ -32,6 +32,7 @@ export interface CardProdutoProps {
     atualizadoEm?: Produto['atualizadoEm'];
   };
   modoPreview?: boolean;
+  destaqueInteligenteMotivo?: string | null;
   onAbrirDetalhes?: (id: string) => void;
 }
 
@@ -45,6 +46,7 @@ function corTextoPlataforma(plataforma: Plataforma): string {
 export function CardProduto({
   produto,
   modoPreview = false,
+  destaqueInteligenteMotivo = null,
   onAbrirDetalhes,
 }: CardProdutoProps) {
   const [imgErro, setImgErro] = useState(false);
@@ -146,12 +148,20 @@ export function CardProduto({
               {plat.nome}
             </span>
 
-            {produto.destaque && (
+            {produto.destaque ? (
               <span className="inline-flex items-center gap-0.5 sm:gap-1 px-1.5 sm:px-2 py-0.5 rounded-md bg-slate-900/90 text-[#22C55E] text-[10px] sm:text-[11px] font-bold shrink-0">
                 <Star className="w-2.5 h-2.5 sm:w-3 sm:h-3 fill-current shrink-0" />
                 <span>Destaque</span>
               </span>
-            )}
+            ) : destaqueInteligenteMotivo ? (
+              <span
+                title={`Destaque inteligente: ${destaqueInteligenteMotivo}`}
+                className="inline-flex items-center gap-0.5 sm:gap-1 px-1.5 sm:px-2 py-0.5 rounded-md bg-slate-900/90 text-[#4ADE80] text-[10px] sm:text-[11px] font-bold shrink-0"
+              >
+                <Flame className="w-2.5 h-2.5 sm:w-3 sm:h-3 shrink-0" />
+                <span>Em alta</span>
+              </span>
+            ) : null}
           </div>
         </div>
 
