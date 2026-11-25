@@ -10,6 +10,7 @@ import {
   RefreshCw,
   Search,
   Square,
+  Star,
   Trash2,
 } from 'lucide-react';
 import { ConfirmDialog } from '../components/ConfirmDialog';
@@ -114,6 +115,7 @@ export function AdminProdutosPage({ onNavigate, onToast }: AdminProdutosPageProp
   const [ordenacao, setOrdenacao] = useState<OrdenacaoAdmin>('mais_recentes');
 
   const [processandoId, setProcessandoId] = useState<string | null>(null);
+  const [destacandoId, setDestacandoId] = useState<string | null>(null);
   const [revalidandoId, setRevalidandoId] = useState<string | null>(null);
   const [produtoParaExcluir, setProdutoParaExcluir] = useState<Produto | null>(null);
   const [excluindo, setExcluindo] = useState(false);
@@ -185,6 +187,32 @@ export function AdminProdutosPage({ onNavigate, onToast }: AdminProdutosPageProp
       onToast('erro', `Não foi possível atualizar "${produto.titulo}". Verifique sua conexão.`);
     } finally {
       setProcessandoId(null);
+    }
+  };
+
+  const alternarDestaque = async (produto: Produto) => {
+    const novoDestaque = !produto.destaque;
+    setDestacandoId(produto.id);
+    try {
+      await atualizarProduto(produto.id, { destaque: novoDestaque });
+      setProdutos((prev) =>
+        prev.map((item) =>
+          item.id === produto.id ? { ...item, destaque: novoDestaque } : item
+        )
+      );
+      onToast(
+        'sucesso',
+        novoDestaque
+          ? `"${produto.titulo}" adicionado aos destaques.`
+          : `"${produto.titulo}" removido dos destaques.`
+      );
+    } catch {
+      onToast(
+        'erro',
+        `Não foi possível atualizar o destaque de "${produto.titulo}". Verifique sua conexão.`
+      );
+    } finally {
+      setDestacandoId(null);
     }
   };
 
@@ -636,6 +664,7 @@ export function AdminProdutosPage({ onNavigate, onToast }: AdminProdutosPageProp
                   const statusInfo = labelStatus(produto);
                   const ocupado =
                     processandoId === produto.id ||
+                    destacandoId === produto.id ||
                     revalidandoId === produto.id ||
                     loteEmExecucao;
                   const proximoStatus: StatusProduto =
@@ -727,6 +756,36 @@ export function AdminProdutosPage({ onNavigate, onToast }: AdminProdutosPageProp
 
                           <button
                             type="button"
+                            onClick={() => void alternarDestaque(produto)}
+                            disabled={ocupado}
+                            aria-pressed={produto.destaque}
+                            title={
+                              produto.destaque
+                                ? 'Remover dos destaques'
+                                : 'Adicionar aos destaques'
+                            }
+                            aria-label={
+                              produto.destaque
+                                ? `Remover "${produto.titulo}" dos destaques`
+                                : `Destacar "${produto.titulo}"`
+                            }
+                            className={`p-2 rounded-lg border transition-colors cursor-pointer disabled:opacity-50 ${
+                              produto.destaque
+                                ? 'border-[#22C55E]/50 bg-[#122616] hover:bg-[#19331F] text-[#4ADE80]'
+                                : 'border-[#1E2A20] bg-[#070A07] hover:bg-[#19231B] text-slate-300 hover:text-[#22C55E]'
+                            }`}
+                          >
+                            {destacandoId === produto.id ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <Star
+                                className={`w-4 h-4 ${produto.destaque ? 'fill-current' : ''}`}
+                              />
+                            )}
+                          </button>
+
+                          <button
+                            type="button"
                             onClick={() => onNavigate(`/admin/editar/${produto.id}`)}
                             disabled={ocupado}
                             title="Editar produto"
@@ -795,6 +854,7 @@ export function AdminProdutosPage({ onNavigate, onToast }: AdminProdutosPageProp
               const statusInfo = labelStatus(produto);
               const ocupado =
                 processandoId === produto.id ||
+                destacandoId === produto.id ||
                 revalidandoId === produto.id ||
                 loteEmExecucao;
               const proximoStatus: StatusProduto =
@@ -866,6 +926,31 @@ export function AdminProdutosPage({ onNavigate, onToast }: AdminProdutosPageProp
                           <RefreshCw className="w-3.5 h-3.5" />
                         )}
                         Revalidar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void alternarDestaque(produto)}
+                        disabled={ocupado}
+                        aria-pressed={produto.destaque}
+                        aria-label={
+                          produto.destaque
+                            ? `Remover "${produto.titulo}" dos destaques`
+                            : `Destacar "${produto.titulo}"`
+                        }
+                        className={`inline-flex items-center gap-1 px-2.5 py-2 rounded-lg border text-xs font-medium cursor-pointer disabled:opacity-50 ${
+                          produto.destaque
+                            ? 'border-[#22C55E]/50 bg-[#122616] text-[#4ADE80]'
+                            : 'border-[#1E2A20] bg-[#070A07] text-slate-200'
+                        }`}
+                      >
+                        {destacandoId === produto.id ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Star
+                            className={`w-3.5 h-3.5 ${produto.destaque ? 'fill-current' : ''}`}
+                          />
+                        )}
+                        <span>{produto.destaque ? 'Destacado' : 'Destacar'}</span>
                       </button>
                       <button
                         type="button"
