@@ -8,7 +8,7 @@ import {
 import { PRODUTO_LIMITES } from './produtoValidation';
 
 export const LIMIAR_SCORE_DESTAQUE_INTELIGENTE = 38;
-export const MAX_DESTAQUES_INTELIGENTES_VITRINE = 6;
+export const MAX_DESTAQUES_INTELIGENTES_VITRINE = 8;
 
 export interface AvaliacaoApeloProduto {
   score: number;

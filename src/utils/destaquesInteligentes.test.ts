@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import type { Produto } from '../types/produto';
 import {
+  MAX_DESTAQUES_INTELIGENTES_VITRINE,
   avaliarApeloProduto,
   selecionarDestaquesVitrine,
 } from './destaquesInteligentes';
@@ -129,3 +130,28 @@ test('selecionarDestaquesVitrine retorna lista vazia de destaques quando desabil
     ['m1']
   );
 });
+
+test('selecionarDestaquesVitrine limita destaques automáticos ao padrão de 8 quando não informado maxAutomaticos', () => {
+  const ref = new Date('2026-11-25T10:00:00Z');
+  assert.equal(MAX_DESTAQUES_INTELIGENTES_VITRINE, 8);
+
+  const candidatos = Array.from({ length: 10 }, (_, idx) =>
+    baseProduto({
+      id: `auto-${idx + 1}`,
+      titulo: `Smart TV QLED 4K Modelo ${idx + 1}`,
+      precoAtual: 1999,
+      precoOriginal: 3999,
+      cupom: 'TVOFF',
+      cliques: 25 - idx,
+      destaque: false,
+      criadoEm: new Date(`2026-11-24T${String(10 + idx).padStart(2, '0')}:00:00Z`),
+    })
+  );
+
+  const resultado = selecionarDestaquesVitrine(candidatos, { referencia: ref });
+
+  assert.equal(resultado.destaques.length, 8);
+  assert.equal(resultado.idsDestaqueInteligente.size, 8);
+  assert.equal(resultado.demaisOfertas.length, 2);
+});
+
