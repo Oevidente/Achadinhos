@@ -8,7 +8,11 @@
  * - Amazon, Magalu, AliExpress, Americanas, KaBuM!: JSON-LD + meta tags + fallback de moeda em texto + fallback de User-Agent.
  */
 
-var TOKEN_SECRETO = 'TROQUE_POR_UM_TOKEN_FORTE_AQUI';
+var TOKEN_PLACEHOLDER_ = 'TROQUE_POR_UM_TOKEN_FORTE_AQUI';
+var EXTRATOR_VERSAO_ = '2026-11-25';
+// Dica: para não perder seu token ao atualizar este arquivo no GitHub/Apps Script,
+// você pode salvá-lo em "Configurações do projeto > Propriedades do script" com a chave TOKEN_SECRETO.
+var TOKEN_SECRETO = TOKEN_PLACEHOLDER_;
 var CACHE_EXPIRACAO_SEGUNDOS = 6 * 60 * 60; // 6 horas
 
 var UA_CHROME =
@@ -48,16 +52,75 @@ var PLATAFORMAS_DOMINIOS = {
   kabum: ['kabum.com.br', 'tidd.ly'],
 };
 
+function obterConfigToken_() {
+  var tokenCodigo = String(TOKEN_SECRETO || '').trim();
+  if (tokenCodigo && tokenCodigo !== TOKEN_PLACEHOLDER_) {
+    return { valor: tokenCodigo, fonte: 'código (TOKEN_SECRETO)' };
+  }
+
+  if (typeof PropertiesService !== 'undefined') {
+    try {
+      var tokenProp = PropertiesService.getScriptProperties().getProperty('TOKEN_SECRETO');
+      if (tokenProp && String(tokenProp).trim()) {
+        return { valor: String(tokenProp).trim(), fonte: 'Propriedades do script' };
+      }
+    } catch (e) {}
+  }
+
+  return { valor: tokenCodigo, fonte: 'não configurado' };
+}
+
+function temAspasNasPontas_(valor) {
+  return /^["']|["']$/.test(String(valor || ''));
+}
+
 function doGet(e) {
   try {
     var params = (e && e.parameter) || {};
     var token = String(params.token || '').trim();
     var url = String(params.url || '').trim();
+    var configToken = obterConfigToken_();
+    var tokenEsperado = configToken.valor;
 
-    if (!token || token !== TOKEN_SECRETO) {
+    if (!tokenEsperado || tokenEsperado === TOKEN_PLACEHOLDER_) {
       return responderJson({
         ok: false,
-        erro: 'Token de autenticação inválido ou ausente.',
+        erro:
+          'Token não configurado no Google Apps Script (v' +
+          EXTRATOR_VERSAO_ +
+          '). Defina TOKEN_SECRETO nas Propriedades do script ou no código e publique uma Nova versão.',
+      });
+    }
+
+    if (!token) {
+      return responderJson({
+        ok: false,
+        erro:
+          'Token ausente na requisição enviada pelo site (Apps Script v' +
+          EXTRATOR_VERSAO_ +
+          '). Verifique VITE_EXTRATOR_TOKEN no GitHub Secrets.',
+      });
+    }
+
+    if (token !== tokenEsperado) {
+      var dicaAspas =
+        temAspasNasPontas_(token) || temAspasNasPontas_(tokenEsperado)
+          ? ' Atenção: há aspas no início ou fim do token; remova as aspas.'
+          : '';
+      return responderJson({
+        ok: false,
+        erro:
+          'Token de autenticação inválido (Apps Script v' +
+          EXTRATOR_VERSAO_ +
+          ' | origem: ' +
+          configToken.fonte +
+          ' | tamanho enviado: ' +
+          token.length +
+          ', esperado: ' +
+          tokenEsperado.length +
+          ').' +
+          dicaAspas +
+          ' Confira se VITE_EXTRATOR_TOKEN no GitHub Secrets é idêntico e rode o workflow do GitHub Pages.',
       });
     }
 

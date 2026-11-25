@@ -351,3 +351,65 @@ test('formatarPrecoParaInput formata preço para vírgula brasileira', () => {
   assert.equal(formatarPrecoParaInput(null), '');
   assert.equal(formatarPrecoParaInput(0), '');
 });
+
+test('Google Apps Script doGet valida TOKEN_SECRETO, aceita PropertiesService e orienta se placeholder não foi trocado', () => {
+  const code = fs.readFileSync(path.resolve(process.cwd(), 'apps-script/Code.gs'), 'utf8');
+
+  function executarDoGet(
+    params: Record<string, string>,
+    scriptProps: Record<string, string> = {}
+  ): { ok: boolean; erro?: string } {
+    let saida = '';
+    const context: Record<string, unknown> = {
+      ContentService: {
+        MimeType: { JSON: 'application/json' },
+        createTextOutput: (txt: string) => ({
+          setMimeType: () => {
+            saida = txt;
+            return txt;
+          },
+        }),
+      },
+      PropertiesService: {
+        getScriptProperties: () => ({
+          getProperty: (chave: string) => scriptProps[chave] ?? null,
+        }),
+      },
+    };
+    vm.createContext(context);
+    vm.runInContext(code, context);
+    const doGet = context.doGet as (e: { parameter: Record<string, string> }) => string;
+    doGet({ parameter: params });
+    return JSON.parse(saida) as { ok: boolean; erro?: string };
+  }
+
+  // Sem token configurado (placeholder ativo e sem PropertiesService)
+  const semConfig = executarDoGet({ token: 'qualquer', url: 'https://www.amazon.com.br/dp/B0CH8R3HSR' });
+  assert.equal(semConfig.ok, false);
+  assert.match(semConfig.erro || '', /não configurado/i);
+
+  // Com PropertiesService configurado: token vazio, divergente e com aspas dão mensagens precisas
+  const tokenAusente = executarDoGet(
+    { token: '', url: 'https://www.amazon.com.br/dp/B0CH8R3HSR' },
+    { TOKEN_SECRETO: 'segredo-producao-123' }
+  );
+  assert.equal(tokenAusente.ok, false);
+  assert.match(tokenAusente.erro || '', /ausente/i);
+
+  const tokenErrado = executarDoGet(
+    { token: '"segredo-producao-123"', url: 'https://www.amazon.com.br/dp/B0CH8R3HSR' },
+    { TOKEN_SECRETO: 'segredo-producao-123' }
+  );
+  assert.equal(tokenErrado.ok, false);
+  assert.match(tokenErrado.erro || '', /inválido/i);
+  assert.match(tokenErrado.erro || '', /aspas/i);
+  assert.match(tokenErrado.erro || '', /Propriedades do script/i);
+
+  const tokenCertoPassaAuth = executarDoGet(
+    { token: ' segredo-producao-123 ', url: 'https://site-fora.exemplo.com/produto' },
+    { TOKEN_SECRETO: ' segredo-producao-123 ' }
+  );
+  assert.equal(tokenCertoPassaAuth.ok, false);
+  assert.match(tokenCertoPassaAuth.erro || '', /Domínio não permitido/i);
+});
+
